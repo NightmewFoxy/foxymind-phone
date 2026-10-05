@@ -363,3 +363,27 @@ body.kb .sv .seg { display: none; }
 .fhead { padding-top: 14px; }
 .fpath { margin-top: 12px; }
 .note { margin-bottom: 10px; }
+
+/* question card: Claude's on-screen question as buttons */
+.qcard { margin: 0 10px 8px; padding: 12px 12px 10px; border-radius: 16px; background: rgba(59,140,255,.13); border: .5px solid rgba(90,160,255,.5); box-shadow: 0 0 18px rgba(59,140,255,.18); max-height: 52vh; overflow-y: auto; -webkit-overflow-scrolling: touch; animation: fade-in .18s; }
+.qhead { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--blue-text); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.qhead i { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+.qctx { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.35); font: 12.5px/1.4 var(--mono); color: #d9cfc8; white-space: pre-wrap; word-break: break-word; max-height: 30vh; overflow-y: auto; }
+.qq { font-size: 17px; font-weight: 650; color: var(--text); line-height: 1.3; margin-bottom: 10px; }
+.qopts { display: flex; flex-direction: column; gap: 7px; }
+.qopt { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 46px; padding: 11px 12px; border-radius: 12px; background: var(--bg-3); border: .5px solid var(--line-2); color: var(--text); text-align: left; font-size: 16px; line-height: 1.3; transition: transform .08s, background-color .12s; }
+.qopt:first-child { background: var(--blue); border-color: transparent; color: #fff; }
+.qopt:active, .qopt.picked { transform: scale(.98); background: var(--accent); color: var(--accent-ink); }
+.qn { flex: none; width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,.12); display: grid; place-items: center; font: 700 13px var(--mono); margin-top: 1px; }
+.ql { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+.ql small { display: block; margin-top: 3px; font-weight: 450; font-size: 13.5px; opacity: .75; }
+.qcard.busy .qopt:not(.picked) { opacity: .45; }
+.qfoot { margin-top: 8px; font-size: 13px; color: var(--text-3); text-align: center; }
+
+/* terminal tab */
+.termhelp { display: flex; align-items: center; gap: 10px; margin: 8px 12px 4px; padding: 9px 10px 9px 12px; border-radius: 12px; background: var(--bg-2); border: .5px solid var(--line); font-size: 13.5px; line-height: 1.35; color: var(--text-2); position: sticky; left: 12px; width: calc(100vw - 24px); box-sizing: border-box; }
+.termhelp span { flex: 1; min-width: 0; }
+.termhelp .btn-sm { height: 32px; font-size: 13.5px; padding: 0 10px; }
+.term.wrap { white-space: pre-wrap; word-break: break-all; width: auto; font-size: 12px; }
+.keys .key { flex: 1 1 0; min-width: 0; padding: 0 4px; }
+.keys .key.wide { flex-grow: 1.6; }

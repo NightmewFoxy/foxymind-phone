@@ -635,8 +635,50 @@
   // ======================================================================================
   const KEYS = [
     ['1', '1', 'num'], ['2', '2', 'num'], ['3', '3', 'num'], ['4', '4', 'num'],
-    ['↑', 'up'], ['↓', 'down'], ['⏎', 'enter'], ['Esc', 'esc', 'wide'], ['Tab', 'tab', 'wide'], ['⇧Tab', 'shift-tab', 'wide'], ['^C', 'ctrl-c', 'wide warn'],
-  ];
+    ['↑', 'up'], ['↓', 'down'], ['Enter', 'enter', 'wide'], ['Stop', 'esc', 'wide'],
+  ]; // (no ^C: pressed twice it quits Claude)
+
+  // Claude's (or Codex's) on-screen question → { question, context, options: [{ n, label, desc }] }, or null.
+  // Reads the last numbered list on the screen: "❯ 1. Yes", "  2. Yes, and don't ask again…", "  3. No… (esc)".
+  function parseQuestion(text) {
+    const lines = String(text || '').split('\n').map((l) => l.replace(/[│╭╮╰╯┌┐└┘]/g, ' ').replace(/\s+$/, ''));
+    const OPT = /^(\s*)([❯>›→]?)\s*(\d)\.\s+(\S.*)$/;
+    let last = -1;
+    for (let i = lines.length - 1; i >= Math.max(0, lines.length - 60); i--) if (OPT.test(lines[i])) { last = i; break; }
+    if (last < 0) return null;
+    let first = -1;
+    for (let i = last; i >= Math.max(0, last - 40); i--) { const m = OPT.exec(lines[i]); if (m && m[3] === '1') { first = i; break; } }
+    if (first < 0) return null;
+    const options = []; let cur = null;
+    const isFooter = (t) => /Enter to (select|confirm)|Esc to (cancel|go back)|↑\/↓|Tab to/i.test(t);
+    for (let i = first; i < lines.length; i++) {
+      const t = lines[i].trim();
+      const m = OPT.exec(lines[i]);
+      if (m && Number(m[3]) === options.length + 1) { cur = { n: m[3], label: m[4].replace(/\s*\((esc|y|n)\)\s*$/i, '').trim(), desc: '' }; options.push(cur); continue; }
+      if (i > last && (!t || isFooter(t))) break;
+      if (!t || /^[─━—-]{3,}$/.test(t) || isFooter(t)) continue;
+      if (cur) cur.desc += (cur.desc ? ' ' : '') + t;
+    }
+    if (options.length < 2) return null;
+    // the question (and what it's about) = the text blocks just above the options
+    const blocks = []; let blk = [];
+    for (let i = first - 1; i >= Math.max(0, first - 24) && blocks.length < 3; i--) {
+      const t = lines[i].trim();
+      if (/^[─━—-]{3,}$/.test(t) || /^[●⏺✻>]/.test(t)) { if (blk.length) blocks.push(blk); blk = []; break; }
+      if (!t) { if (blk.length) { blocks.push(blk); blk = []; } continue; }
+      blk.unshift(t);
+    }
+    if (blk.length && blocks.length < 3) blocks.push(blk);
+    if (!blocks.length) return null;
+    // the question = the last line ending in "?" (else the nearest block); everything else = what it is about
+    const all = blocks.reverse().map((b) => b.map((t) => t.replace(/^[›☐❯]\s*/, '')));
+    let qi = -1; let qj = -1;
+    all.forEach((b, i) => b.forEach((t, j) => { if (/\?\s*$/.test(t)) { qi = i; qj = j; } }));
+    let question;
+    if (qi >= 0) { question = all[qi][qj]; all[qi].splice(qj, 1); } else question = all.pop().join(' ');
+    const context = all.filter((b) => b.length).map((b) => b.join('\n')).join('\n\n');
+    return { question, context, options };
+  }
   const pendingBySession = new Map(); // id -> [{ text, sentAt, status, baseCount }]
 
   function hashStr(s) {
@@ -707,7 +749,7 @@
     let chatLoop = null; let screenLoop = null;
     let unwatch = () => {};
     let atBottom = true; let screenAtBottom = true;
-    let askAutoDone = false;
+    let askSince = 0;
     const draftKey = `draft.${id}`;
 
     const el = screenEl('sv', `
@@ -718,15 +760,16 @@
           <div class="ttl"><div class="t1"></div><div class="t2"></div></div>
           <span class="statepill"></span>
         </div>
-        <div class="seg" role="tablist" hidden><span class="thumb"></span><button role="tab" data-tab="chat" class="on">Chat</button><button role="tab" data-tab="screen">Screen</button></div>
+        <div class="seg" role="tablist" hidden><span class="thumb"></span><button role="tab" data-tab="chat" class="on">Chat</button><button role="tab" data-tab="screen">Terminal</button></div>
         <div class="askbar" hidden></div>
         <div class="offline-slot">${offlineBanner()}</div>
         <div class="hline"></div>
       </header>
       <div class="scroll chatscroll can-stale"><div class="chat"></div></div>
-      <div class="scroll screenscroll can-stale" hidden><pre class="term"></pre><div class="termnote" hidden></div></div>
+      <div class="scroll screenscroll can-stale" hidden><div class="termhelp"><span>The session's terminal, live, as on your computer. You rarely need it: the Chat has everything, and questions show up there as buttons.</span><button class="btn-sm" data-act="wrap"></button></div><pre class="term"></pre><div class="termnote" hidden></div></div>
       <button class="newpill" hidden>${I.down}New messages</button>
       <footer class="botbar composer">
+        <div class="qcard" hidden></div>
         <div class="keys" hidden>${KEYS.map(([label, key, cls]) => `<button class="key ${cls || ''}" data-key="${key}" aria-label="${key}">${esc(label)}</button>`).join('')}</div>
         <div class="hint"></div>
         <div class="crow-in">
@@ -744,6 +787,11 @@
     const termNote = $('.termnote', el);
     const newPill = $('.newpill', el);
     const keysEl = $('.keys', el);
+    const qcard = $('.qcard', el);
+    let q = null; let qSig = ''; let qLoop = null; let qBusy = false;
+    let wrap = lsGet('termWrap') !== '0';
+    const shown = (t) => (wrap ? String(t || '').replace(/[─━═]{12,}/g, '────────────') : t) || ' '; // wrapped long rules = noise
+    const paintWrap = () => { term.textContent = shown(screen.text); term.classList.toggle('wrap', wrap); $('[data-act="wrap"]', el).textContent = wrap ? 'Wrap: on' : 'Wrap: off'; };
     const hint = $('.hint', el);
     const box = $('.inbox', el);
     const sendBtn = $('.send', el);
@@ -771,19 +819,17 @@
       const hasChat = s ? !!s.claude : chat.claude;
       seg.hidden = !hasChat;
       if (!hasChat && tab !== 'screen') setTab('screen');
-      $('[data-tab="screen"]', seg).innerHTML = `Screen${s && s.ask ? ' <span class="askdot"></span>' : ''}`;
+      $('[data-tab="screen"]', seg).textContent = 'Terminal';
 
       // Claude is asking: banner, and on opening go straight to the Screen
-      if (s && s.ask) {
+      if (s && s.ask && !q && askSince && Date.now() - askSince > 4000) {
         askbar.hidden = false;
         askbar.innerHTML = tab === 'screen'
-          ? `<div class="grow">Claude is asking you something<small>Answer with the keys below, or type a reply</small></div>`
-          : `<div class="grow">Claude is asking you something<small>Answer it on the Screen tab</small></div><button class="btn-sm" data-act="to-screen">Answer</button>`;
+          ? `<div class="grow">It's asking you something<small>Answer with the keys below, or type a reply</small></div>`
+          : `<div class="grow">It's asking you something<small>See it on the Terminal tab</small></div><button class="btn-sm" data-act="to-screen">Open</button>`;
       } else askbar.hidden = true;
-      if (s && !askAutoDone) {
-        askAutoDone = true;
-        if (s.ask && tab !== 'screen') setTab('screen');
-      }
+      if (s && s.ask && !qLoop) { askSince = Date.now(); qLoop = loop(fetchQuestion, 1500); }
+      if (!(s && s.ask) && qLoop) { qLoop.stop(); qLoop = null; askSince = 0; showQuestion(null); }
 
       // composer hint
       let hc = ''; let ht = '';
@@ -921,11 +967,46 @@
       if (text !== screen.text || !screen.loaded) {
         const wasBottom = screenAtBottom || !screen.loaded;
         screen.text = text;
-        term.textContent = text || ' ';
+        term.textContent = shown(text);
         screen.loaded = true;
         if (wasBottom) screenScroll.scrollTop = screenScroll.scrollHeight;
       }
     }
+    // ----- a question on screen → buttons -----
+    async function fetchQuestion() {
+      const r = await api('GET', `/sessions/${encodeURIComponent(id)}/screen?lines=60`);
+      showQuestion(parseQuestion(r.text));
+    }
+    function showQuestion(nq) {
+      const sig = nq ? JSON.stringify(nq) : '';
+      if (sig === qSig) return;
+      qSig = sig; q = nq; qBusy = false;
+      qcard.hidden = !q;
+      qcard.classList.remove('busy');
+      if (q) {
+        qcard.innerHTML = `<div class="qhead"><i></i>${meta && meta.provider === 'codex' ? 'Codex asks' : 'Claude asks'}</div>
+          ${q.context ? `<pre class="qctx">${esc(q.context)}</pre>` : ''}
+          <div class="qq">${esc(q.question)}</div>
+          <div class="qopts">${q.options.map((o) => `<button class="qopt" data-n="${o.n}"><span class="qn">${o.n}</span><span class="ql">${esc(o.label)}${o.desc ? `<small>${esc(o.desc)}</small>` : ''}</span></button>`).join('')}</div>
+          <div class="qfoot">Or type a different answer below.</div>`;
+      }
+      paintHeader();
+      requestAnimationFrame(() => { if (tab === 'chat' && atBottom) chatScroll.scrollTop = chatScroll.scrollHeight; });
+    }
+    qcard.addEventListener('mousedown', (e) => { if (e.target.closest('.qopt')) e.preventDefault(); });
+    qcard.addEventListener('click', async (e) => {
+      const b = e.target.closest('.qopt');
+      if (!b || qBusy) return;
+      qBusy = true;
+      qcard.classList.add('busy'); b.classList.add('picked');
+      try {
+        await api('POST', `/sessions/${encodeURIComponent(id)}/key`, { key: b.dataset.n });
+        toast('Answered');
+        setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); if (qLoop) qLoop.kick(); if (screenLoop) screenLoop.kick(); }, 400);
+      } catch (err) { qBusy = false; qcard.classList.remove('busy'); b.classList.remove('picked'); toast(err.offline ? 'Can\'t reach your Mac' : `Not sent: ${err.message}`, 'err'); }
+    });
+    el.addEventListener('click', (e) => { if (e.target.closest('[data-act="wrap"]')) { wrap = !wrap; lsSet('termWrap', wrap ? '1' : '0'); paintWrap(); } });
+
     keysEl.addEventListener('mousedown', (e) => { if (e.target.closest('.key')) e.preventDefault(); }); // keep the keyboard up
     keysEl.addEventListener('click', async (e) => {
       const k = e.target.closest('.key');
@@ -997,9 +1078,8 @@
         box.value = lsGet(draftKey) || '';
         grow();
         subs.add(onSessions);
-        // opening a session that's asking something goes straight to its Screen
-        setTab(meta && (meta.ask || !meta.claude) ? 'screen' : 'chat');
-        askAutoDone = !!meta;
+        setTab(meta && !meta.claude ? 'screen' : 'chat');
+        paintWrap();
         paintHeader();
         if (sessionsLoop) sessionsLoop.kick();
       },
@@ -1007,6 +1087,7 @@
         subs.delete(onSessions);
         if (chatLoop) chatLoop.stop();
         if (screenLoop) screenLoop.stop();
+        if (qLoop) qLoop.stop();
         clearTimeout(draftTimer);
         lsSet(draftKey, box.value);
         unwatch();
