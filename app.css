@@ -390,3 +390,21 @@ body.kb .sv .seg { display: none; }
 .term.wrap { white-space: pre-wrap; word-break: break-all; width: auto; font-size: 12px; }
 .keys .key { flex: 1 1 0; min-width: 0; padding: 0 4px; }
 .keys .key.wide { flex-grow: 1.6; }
+
+/* model and effort picker: a chip over the message box (its picker opens above it), and on a folder's New chat */
+.mbar { display: flex; padding: 0 12px 7px; }
+.mchip { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: 14px; background: var(--bg-3); color: var(--text-2); font-size: 13px; font-weight: 600; transition: opacity .15s; }
+.mchip .chev { width: 6px; height: 10px; color: currentColor; opacity: .6; transform: rotate(-90deg); transition: transform .2s var(--ease); }
+.mchip[aria-expanded="true"] { background: var(--bg-4); color: var(--text); }
+.mchip[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.mchip.busy { opacity: .55; }
+.mpanel { margin: 0 10px 8px; padding: 10px 10px 12px; border-radius: 16px; background: var(--bg-2); border: .5px solid var(--line-2); animation: fade-in .18s; }
+.mpanel.busy { pointer-events: none; }
+.mpick { display: flex; flex-direction: column; gap: 6px; }
+.mlab { padding: 2px 4px 0; font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.mrow { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: rgba(118,118,128,.2); }
+.mrow button { flex: 1; min-width: 0; height: 36px; border-radius: 8px; font-size: 14px; font-weight: 600; color: var(--text-2); white-space: nowrap; transition: background .15s, color .15s; }
+.mrow button.on { background: #463c36; color: var(--text); box-shadow: 0 3px 8px rgba(0,0,0,.3), 0 0 0 .5px rgba(255,255,255,.06); }
+.mrow button.wait { animation: mwait 1s ease-in-out infinite; }
+@keyframes mwait { 50% { opacity: .45; } }
+.fpick { padding: 12px 16px 0; }

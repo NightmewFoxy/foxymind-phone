@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '1.0';
+  const APP_VERSION = '1.1';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -106,6 +106,17 @@
   }
   const COLOR_WORD = { blue: 'waiting', stopped: 'stopped', orange: 'working', half: 'still running', idle: 'idle', asleep: 'asleep', off: 'ended' };
   const STATE_LABEL = { blue: 'Waiting for you', stopped: 'Stopped', orange: 'Working', half: 'Done · still running', idle: 'Idle', asleep: 'Asleep', off: 'Ended' };
+  // The model and effort picker (a session's chip, and what a new chat starts on: Opus 5.5 at medium unless picked)
+  const MODELS = [['opus', 'Opus 5.5'], ['sonnet', 'Sonnet 5.5']];
+  const EFFORTS = [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'xHigh'], ['max', 'Max']];
+  const MODEL_LABEL = { opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', haiku: 'Haiku', fable: 'Fable' };
+  const EFFORT_LABEL = Object.fromEntries(EFFORTS);
+  const NEW_CHAT = { model: 'opus', effort: 'medium' };
+  const modelLabel = (model, effort) => [MODEL_LABEL[model], EFFORT_LABEL[effort]].filter(Boolean).join(' · ');
+  function pickerHtml(model, effort) {
+    const row = (list, attr, cur) => `<div class="mrow">${list.map(([k, l]) => `<button type="button" data-${attr}="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${l}</button>`).join('')}</div>`;
+    return `<div class="mpick"><div class="mlab">Model</div>${row(MODELS, 'model', model)}<div class="mlab">Effort</div>${row(EFFORTS, 'effort', effort)}</div>`;
+  }
   const machineTag = (s) => `<span class="mtag ${s.machine === 'pc' ? 'pc' : ''}">${esc(s.machineName || (s.machine === 'pc' ? 'Windows' : 'Mac'))}</span>`;
 
   function toast(msg, kind) {
@@ -774,6 +785,8 @@
         <div class="qcard" hidden></div>
         <div class="keys" hidden>${KEYS.map(([label, key, cls]) => `<button class="key ${cls || ''}" data-key="${key}" aria-label="${key}">${esc(label)}</button>`).join('')}</div>
         <div class="hint"></div>
+        <div class="mpanel" hidden></div>
+        <div class="mbar" hidden><button class="mchip" data-act="mchip" aria-expanded="false" aria-label="Model and effort"><span class="ml"></span>${I.chev}</button></div>
         <div class="crow-in">
           <textarea class="inbox" rows="1" placeholder="Message" enterkeyhint="enter" autocapitalize="sentences" aria-label="Message"></textarea>
           <button class="send" data-act="send" aria-label="Send" disabled><span>${I.send}</span></button>
@@ -797,6 +810,50 @@
     const hint = $('.hint', el);
     const box = $('.inbox', el);
     const sendBtn = $('.send', el);
+    const mbar = $('.mbar', el);
+    const mchip = $('.mchip', el);
+    const mpanel = $('.mpanel', el);
+    let mOpen = false; let mBusy = false; let mPicked = null; let mSig = '';
+
+    // ----- model and effort: a chip over the message box, its picker opens above it -----
+    // (what was just picked shows at once; the sessions list says the same a moment later)
+    function modelNow() {
+      const fresh = mPicked && Date.now() - mPicked.at < 15000 ? mPicked : {};
+      return { model: fresh.model || (meta && meta.model) || null, effort: fresh.effort || (meta && meta.effort) || null };
+    }
+    function paintModel() {
+      const show = !!(meta && meta.claude && meta.color !== 'off');
+      if (!show) mOpen = false;
+      mbar.hidden = !show;
+      mpanel.hidden = !mOpen;
+      const now = modelNow();
+      $('.ml', mchip).textContent = modelLabel(now.model, now.effort) || 'Model';
+      mchip.setAttribute('aria-expanded', String(mOpen));
+      const sig = mOpen ? `${now.model}|${now.effort}` : '';
+      if (sig !== mSig && !mBusy) { mSig = sig; mpanel.innerHTML = mOpen ? pickerHtml(now.model, now.effort) : ''; }
+    }
+    mbar.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard up)
+    mpanel.addEventListener('mousedown', (e) => e.preventDefault());
+    mchip.addEventListener('click', () => { mOpen = !mOpen; paintModel(); });
+    mpanel.addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-model], button[data-effort]');
+      if (!b || mBusy) return;
+      const now = modelNow();
+      const want = b.dataset.model ? { model: b.dataset.model } : { effort: b.dataset.effort };
+      if ((want.model || now.model) === now.model && (want.effort || now.effort) === now.effort) return; // (already so)
+      mBusy = true;
+      $$('button', b.parentElement).forEach((x) => x.classList.toggle('on', x === b));
+      b.classList.add('wait'); mpanel.classList.add('busy'); mchip.classList.add('busy');
+      try {
+        const r = await api('POST', `/sessions/${encodeURIComponent(id)}/model`, want, { timeout: 30000 });
+        mPicked = { model: r.model || want.model || now.model, effort: r.effort || want.effort || now.effort, at: Date.now() };
+        toast(`Now on ${modelLabel(mPicked.model, mPicked.effort)}`);
+        setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); }, 600);
+      } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : `Not changed: ${err.message}`, 'err'); }
+      mBusy = false; mSig = '~';
+      mpanel.classList.remove('busy'); mchip.classList.remove('busy');
+      paintModel();
+    });
 
     // ----- header / state -----
     function paintHeader() {
@@ -842,6 +899,7 @@
       else if (!s && data.sessions && Date.now() - openedAt > 20000) ht = 'This session isn\'t open any more.';
       hint.className = `hint ${hc}`;
       hint.innerHTML = ht ? `<i></i>${esc(ht)}` : '';
+      paintModel();
     }
     function onSessions() {
       const s = (data.sessions || []).find((x) => x.id === id) || null;
@@ -1169,6 +1227,7 @@
       </header>
       <div class="scroll can-stale">
         <div class="fhead"><button class="btn primary" data-act="new">${I.plus}New Claude chat</button></div>
+        <div class="fpick">${pickerHtml(NEW_CHAT.model, NEW_CHAT.effort)}</div>
         <p class="fpath">${f0 && f0.path ? esc(f0.path) : ''}</p>
         <div class="chats"></div>
       </div>
@@ -1178,6 +1237,7 @@
     let unwatch = () => {};
     let busy = false;
     let chats = null;
+    const start = { ...NEW_CHAT }; // what the new chat opens on (Opus 5.5 at medium each time, unless picked here)
 
     function render(r) {
       if (!r) { chatsEl.innerHTML = '<div class="glabel">Resume a chat</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
@@ -1215,11 +1275,17 @@
       if (e.target.closest('[data-act="back"]')) { if (prevHash === '#/folders') back('#/folders'); else go('#/folders', 'pop'); return; }
       if (e.target.closest('[data-act="reload"]')) { render(null); load(); return; }
       if (busy) return;
+      const pk = e.target.closest('.fpick button');
+      if (pk) {
+        if (pk.dataset.model) start.model = pk.dataset.model; else start.effort = pk.dataset.effort;
+        $('.fpick', el).innerHTML = pickerHtml(start.model, start.effort);
+        return;
+      }
       if (e.target.closest('[data-act="new"]')) {
         busy = true;
         newBtn.innerHTML = '<span class="spin"></span>Starting…';
         try {
-          const r = await api('POST', `/folders/${encodeURIComponent(fid)}/new`, { provider: 'claude' });
+          const r = await api('POST', `/folders/${encodeURIComponent(fid)}/new`, { provider: 'claude', model: start.model, effort: start.effort }, { timeout: 60000 });
           go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
         } catch (err) {
           toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't start: ${err.message}`, 'err');
