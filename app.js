@@ -49,6 +49,7 @@
     plusbox: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="2" width="16" height="16" rx="4"/><path d="M10 6.5v7M6.5 10h7"/></svg>',
     plus: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>',
     down: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v10M2.5 7.5 7 12l4.5-4.5"/></svg>',
+    close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
     warn: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 15 14H1z"/><path d="M8 6.5v3.2M8 12h.01"/></svg>',
     // tool icons
     t_term: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="m4.5 6.5 2 1.5-2 1.5M8.5 10h3"/></svg>',
@@ -759,6 +760,7 @@
           <button class="back" data-act="back" aria-label="Back to sessions">${I.back}</button>
           <div class="ttl"><div class="t1"></div><div class="t2"></div></div>
           <span class="statepill"></span>
+          <button class="closewin" data-act="close" aria-label="Close this window" title="Close window">${I.close}</button>
         </div>
         <div class="seg" role="tablist" hidden><span class="thumb"></span><button role="tab" data-tab="chat" class="on">Chat</button><button role="tab" data-tab="screen">Terminal</button></div>
         <div class="askbar" hidden></div>
@@ -1069,6 +1071,28 @@
     }
 
     el.addEventListener('click', (e) => { if (e.target.closest('[data-act="back"]')) back('#/'); });
+
+    // ----- close the window (like its ✕ on the computer: stops it and frees its memory) -----
+    let closing = false;
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-act="close"]');
+      if (!b || closing) return;
+      const busy = meta && (meta.color === 'orange' || meta.color === 'half');
+      const where = meta && meta.machineName ? ` on ${meta.machineName}` : '';
+      if (!window.confirm(`Close this window${where}?${busy ? ' It is still working; closing stops it.' : ''} Its memory is freed. You can resume the chat later from its folder.`)) return;
+      closing = true; b.disabled = true; b.classList.add('busy');
+      try {
+        await api('POST', `/sessions/${encodeURIComponent(id)}/close`, {});
+        if (data.sessions) data.sessions = data.sessions.filter((x) => x.id !== id);
+        lsSet(draftKey, ''); box.value = '';
+        toast('Window closed. Its memory is freed.');
+        if (sessionsLoop) sessionsLoop.kick();
+        back('#/');
+      } catch (er) {
+        toast(`Couldn't close it: ${er.message}`, 'error');
+        closing = false; b.disabled = false; b.classList.remove('busy');
+      }
+    });
 
     return {
       el,

@@ -64,6 +64,9 @@ body.kb { --sab: 0px; }
 .navrow .t2 { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 .back { width: 44px; height: 44px; display: grid; place-items: center; color: var(--accent); border-radius: 12px; flex: none; }
 .back:active { background: rgba(255,255,255,.06); }
+.closewin { width: 36px; height: 36px; margin-right: -6px; display: grid; place-items: center; flex: none; border-radius: 18px; color: var(--text-3); background: var(--bg-3); }
+.closewin:active { background: rgba(255,107,94,.18); color: var(--red); }
+.closewin.busy { opacity: .45; }
 .navrow h2 { margin: 0; font-size: 17px; font-weight: 650; }
 
 /* connection pill */
