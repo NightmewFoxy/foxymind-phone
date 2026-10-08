@@ -1,12 +1,12 @@
 // FoxyMind Phone service worker: keeps the app shell for offline starts, shows push notifications,
 // and opens the right session when one is tapped. The Mac's API (another origin) is never touched.
-const VERSION = 'fm-phone-v6d';
+const VERSION = 'fm-phone-v7';
 const SHELL = [
   './',
   './index.html',
-  './app.css?v=6',
-  './app.js?v=6',
-  './md.js?v=6',
+  './app.css?v=7',
+  './app.js?v=7',
+  './md.js?v=7',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
@@ -66,20 +66,23 @@ self.addEventListener('push', (event) => {
     icon: './icon-192.png',
     badge: './badge-72.png',
     timestamp: Date.now(),
-    data: { sessionId: d.sessionId || null, color: d.color || null },
+    data: { sessionId: d.sessionId || null, color: d.color || null, captcha: d.captcha || null },
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const id = event.notification.data && event.notification.data.sessionId;
-  const target = new URL(id ? `./#/s/${encodeURIComponent(id)}` : './#/', self.registration.scope).href;
+  const nd = event.notification.data || {};
+  const id = nd.sessionId;
+  const cv = nd.captcha && /^cv_[0-9a-f]{10}$/.test(nd.captcha.id || '') ? nd.captcha : null; // (a robot check: straight to its solve screen)
+  const hash = cv ? `#/cv/${encodeURIComponent(cv.machine || 'mac')}/${cv.id}` : null;
+  const target = new URL(hash ? `./${hash}` : id ? `./#/s/${encodeURIComponent(id)}` : './#/', self.registration.scope).href;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of wins) {
       if (!c.url.startsWith(self.registration.scope)) continue;
       try { await c.focus(); } catch (e) { /* not allowed: fine */ }
-      c.postMessage({ type: 'open', sessionId: id || null });
+      c.postMessage({ type: 'open', sessionId: id || null, hash });
       return;
     }
     await self.clients.openWindow(target);

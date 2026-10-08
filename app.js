@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '6.0';
+  const APP_VERSION = '7.0';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -79,6 +79,10 @@
     k_codex: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6 3 10l4 4M13 6l4 4-4 4"/></svg>',
     k_grok: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M5 15 15.5 4.5"/></svg>',
     k_term: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="m6 8 2.5 2L6 12M10.5 12.5h3.5"/></svg>',
+    puzzle: '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 7.5h3.2a2.3 2.3 0 1 1 4.6 0H15v3.3a2.3 2.3 0 1 1 0 4.6V18.5H11.8a2.3 2.3 0 1 0-4.6 0H4V15.4a2.3 2.3 0 1 0 0-4.6z"/></svg>',
+    kbd: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="5" width="16.4" height="10.5" rx="2.2"/><path d="M5 8.5h.01M8 8.5h.01M11 8.5h.01M14 8.5h.01M6 12h8"/></svg>',
+    zoomin: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m12.7 12.7 4.3 4.3M8.5 6v5M6 8.5h5"/></svg>',
+    expand: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5V3h4.5M17 7.5V3h-4.5M3 12.5V17h4.5M17 12.5V17h-4.5"/></svg>',
     // tool icons
     t_term: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="m4.5 6.5 2 1.5-2 1.5M8.5 10h3"/></svg>',
     t_file: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 1.8h6l3 3v9.4h-9z"/><path d="M9.5 1.8v3h3M5.8 8.5h4.4M5.8 11h4.4" stroke-linecap="round"/></svg>',
@@ -444,7 +448,7 @@
   window.addEventListener('online', () => { conn.lastDiscover = 0; kickAll(); });
 
   // ---------- shared data: sessions (feeds the list, the session header and the tab badge) ----------
-  const data = { sessions: null, counts: { blue: 0, orange: 0, half: 0 }, at: 0, hello: null, folders: null, notes: null, machines: null, usage: null };
+  const data = { sessions: null, counts: { blue: 0, orange: 0, half: 0 }, at: 0, hello: null, folders: null, notes: null, machines: null, usage: null, captchas: null };
   const subs = new Set();
   let sessionsLoop = null;
   async function fetchSessions() {
@@ -457,7 +461,14 @@
     subs.forEach((f) => f());
   }
   // the bell (the Mac's notifications) and the computers (Mac + Windows twin): polled while the app is open
-  let notesLoop = null; let machinesLoop = null;
+  let notesLoop = null; let machinesLoop = null; let cvLoop = null;
+  // robot checks on any computer (lib/captchaview.js): a red line over the sessions list until solved
+  async function fetchCaptchas() {
+    if (!has('captcha')) return;
+    const r = await api('GET', '/captchas');
+    data.captchas = Array.isArray(r.checks) ? r.checks : [];
+    subs.forEach((f) => f('captchas'));
+  }
   async function fetchNotes() {
     if (!has('notifications')) return;
     const r = await api('GET', '/notifications');
@@ -479,13 +490,15 @@
     if (!sessionsLoop) sessionsLoop = loop(fetchSessions, 3000);
     if (!notesLoop) notesLoop = loop(fetchNotes, 20000);
     if (!machinesLoop) machinesLoop = loop(fetchMachines, 15000);
-    if (!data.hello) api('GET', '/hello').then((h) => { setHello(h); if (notesLoop) notesLoop.kick(); if (machinesLoop) machinesLoop.kick(); }).catch(() => {});
+    if (!cvLoop) cvLoop = loop(fetchCaptchas, 5000);
+    if (!data.hello) api('GET', '/hello').then((h) => { setHello(h); if (notesLoop) notesLoop.kick(); if (machinesLoop) machinesLoop.kick(); if (cvLoop) cvLoop.kick(); }).catch(() => {});
   }
   function stopGlobal() {
     if (sessionsLoop) { sessionsLoop.stop(); sessionsLoop = null; }
     if (notesLoop) { notesLoop.stop(); notesLoop = null; }
     if (machinesLoop) { machinesLoop.stop(); machinesLoop = null; }
-    data.sessions = null; data.hello = null; data.folders = null; data.notes = null; data.machines = null; data.usage = null;
+    if (cvLoop) { cvLoop.stop(); cvLoop = null; }
+    data.sessions = null; data.hello = null; data.folders = null; data.notes = null; data.machines = null; data.usage = null; data.captchas = null;
   }
   // last list from a previous run, so a cold start (or an offline one) shows something at once
   if (store.token && Array.isArray(store.lastSessions)) { data.sessions = store.lastSessions; data.counts = store.lastCounts || data.counts; }
@@ -539,6 +552,7 @@
     let m;
     if ((m = h.match(/^#\/s\/(.+)$/))) return show(SessionView(decodeURIComponent(m[1])));
     if ((m = h.match(/^#\/f\/(.+)$/))) return show(FolderView(decodeURIComponent(m[1])));
+    if ((m = h.match(/^#\/cv\/([A-Za-z0-9_.%-]+)\/(cv_[0-9a-f]{10})$/))) return show(CaptchaView(decodeURIComponent(m[1]), m[2]));
     if (h === '#/folders') return show(FoldersView());
     if (h === '#/settings') return show(SettingsView());
     if (h === '#/usage') return show(UsageView());
@@ -716,6 +730,16 @@
     try { await api('DELETE', '/move-all'); if (data.machines) data.machines.moving = null; toast('Stopped. Sessions not moved yet stay where they are.'); subs.forEach((f) => f('machines')); }
     catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : e.message, 'err'); if (btn) btn.disabled = false; }
   }
+  // The red "Robot check" lines over the sessions list (open ones; a solved one shows green for 2 min)
+  const cvHref = (c) => `#/cv/${encodeURIComponent(c.machine || 'mac')}/${encodeURIComponent(c.id)}`;
+  function captchaLines() {
+    if (!has('captcha') || !Array.isArray(data.captchas)) return '';
+    return data.captchas.filter((c) => c.status === 'open' || (c.status === 'solved' && Date.now() - (c.doneAt || 0) < 120000)).map((c) => {
+      const who = (c.sessions || [])[0];
+      if (c.status === 'solved') return `<a class="cvbar done" href="${cvHref(c)}"><span class="cvico">${I.check}</span><span class="grow">Robot check solved<small>${esc(c.siteName)} · ${esc(c.where || '')}${who ? ` · ${esc(who)} carries on` : ''}</small></span></a>`;
+      return `<a class="cvbar" href="${cvHref(c)}"><span class="cvico">${I.puzzle}</span><span class="grow">Robot check on ${esc(c.where || 'a computer')}<small>${esc(c.siteName)} · ${esc(c.chrome || 'Chrome')}${who ? ` · ${esc(who)} is waiting` : ''} · ${age(c.at)}</small></span><span class="btn-sm solve">Solve</span></a>`;
+    }).join('');
+  }
   function pcStatusLine() {
     if (!has('machines')) return '';
     const pc = pcMachine();
@@ -853,7 +877,7 @@
         <div class="searchrow"><label class="search">${I.search}<input type="search" class="sq" placeholder="Search sessions" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search sessions"><button type="button" class="sclear" data-act="sclear" aria-label="Clear search" hidden>${I.xsmall}</button></label></div>
         <div class="offline-slot">${offlineBanner()}</div>
       </header>
-      <div class="scroll can-stale"><div class="pcline"></div><div class="groups"></div></div>
+      <div class="scroll can-stale"><div class="cvline"></div><div class="pcline"></div><div class="groups"></div></div>
       ${tabbar('sessions')}`);
     const groupsEl = $('.groups', el);
     const subrow = $('.subrow .counts', el);
@@ -864,7 +888,10 @@
     let lastHtml = '';
     let unwatch = () => {};
 
+    const cvline = $('.cvline', el);
     function render() {
+      const cvh = captchaLines();
+      if (cvline.innerHTML !== cvh) cvline.innerHTML = cvh;
       pcline.innerHTML = pcStatusLine();
       const c = data.counts || {};
       const waiting = c.blue || 0;
@@ -927,6 +954,7 @@
       const a = e.target.closest('a.srow');
       if (a) { e.preventDefault(); go(a.getAttribute('href'), 'push'); }
     });
+    cvline.addEventListener('click', (e) => { const a = e.target.closest('a.cvbar'); if (a) { e.preventDefault(); go(a.getAttribute('href'), 'push'); } });
 
     // pull down past the top to refresh now
     let pullStart = null;
@@ -941,7 +969,7 @@
     const tick = setInterval(render, 15000); // ages ("waiting 4m") move on between polls
     return {
       el,
-      mounted() { unwatch = watchBars(el); subs.add(render); render(); if (sessionsLoop) sessionsLoop.kick(); if (machinesLoop) machinesLoop.kick(); },
+      mounted() { unwatch = watchBars(el); subs.add(render); render(); if (sessionsLoop) sessionsLoop.kick(); if (machinesLoop) machinesLoop.kick(); if (cvLoop) cvLoop.kick(); },
       onHello() { lastHtml = ''; render(); },
       destroy() { subs.delete(render); clearInterval(tick); unwatch(); },
     };
@@ -2175,7 +2203,7 @@
     function notifSection() {
       const h = data.hello;
       const dev = (h && h.device) || {};
-      const nt = dev.notify || { blue: true, ask: true, away: false };
+      const nt = Object.assign({ captcha: true }, dev.notify || { blue: true, ask: true, away: false });
       let inner = '';
       let foot = 'Get a notification when a session turns blue and needs you.';
       if (isIOS && !isStandalone()) {
@@ -2193,6 +2221,7 @@
           inner = sw('blue', 'A session is waiting for me')
             + sw('ask', 'Claude asks me something')
             + sw('away', 'Only when I\'m away from the Mac', 'Quiet while you\'re using the Mac')
+            + (has('captcha') ? sw('captcha', 'A robot check needs me', 'Any computer, even while you\'re at the Mac') : '')
             + `<button class="lrow btnrow-l" style="width:100%" data-act="push-test">${busy === 'test' ? 'Sending…' : 'Send a test'}</button>`
             + `<button class="lrow danger" style="width:100%" data-act="push-off">Turn off on this phone</button>`;
           foot = 'One notification per session; tap it to open that session.';
@@ -2338,7 +2367,7 @@
     body.addEventListener('change', async (e) => {
       const s = e.target.closest('[data-nt]');
       if (!s) return;
-      const nt = Object.assign({ blue: true, ask: true, away: false }, (data.hello && data.hello.device && data.hello.device.notify) || {});
+      const nt = Object.assign({ blue: true, ask: true, away: false, captcha: true }, (data.hello && data.hello.device && data.hello.device.notify) || {});
       nt[s.dataset.nt] = s.checked;
       s.disabled = true;
       try {
@@ -2359,12 +2388,270 @@
     };
   }
 
+  // ======================================================================================
+  // A robot check (owner 8 Oct 2026: "for captchas on windows … access it in foxymind ios to solve the captcha"):
+  // the tab live (a picture of the part shown, a few times a second); one finger is the mouse there (tap, or drag a
+  // slider: every point goes with its own timing, so the page sees his real movement), two fingers move and zoom the
+  // picture. Typing goes into whatever he tapped. Nothing is ever clicked for him (lib/captchaview.js).
+  // ======================================================================================
+  function CaptchaView(machine, cid) {
+    const base = `/captchas/${encodeURIComponent(machine)}/${encodeURIComponent(cid)}`;
+    let meta = (data.captchas || []).find((c) => c.id === cid && (c.machine || 'mac') === machine) || null;
+    const el = screenEl('cv', `
+      <header class="topbar">
+        <div class="navrow">
+          <button class="back" data-act="back" aria-label="Back">${I.back}</button>
+          <div class="ttl"><div class="t1">Robot check</div><div class="t2"></div></div>
+          <span class="cvlive"><i></i><span>Connecting…</span></span>
+        </div>
+        <div class="offline-slot">${offlineBanner()}</div>
+      </header>
+      <div class="cvstage" aria-label="The check, live"><img class="cvimg" alt="" draggable="false"><div class="cvdot" hidden></div><div class="cvmsg" hidden></div><div class="cvdone" hidden></div></div>
+      <footer class="botbar cvbot">
+        <div class="cvhint">One finger is the mouse: tap, or drag the slider. Two fingers move and zoom the picture.</div>
+        <div class="cvtype" hidden><input class="cvin" type="text" placeholder="Text to type into the page" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Text to type"><button class="btn-sm" data-act="tsend">Type</button><button class="btn-sm" data-act="kenter" aria-label="Enter key">⏎</button><button class="btn-sm" data-act="kback" aria-label="Delete key">⌫</button></div>
+        <div class="cvtools">
+          <button type="button" data-act="zbox">${I.zoomin}<span>Zoom on check</span></button>
+          <button type="button" data-act="zall">${I.expand}<span>Whole tab</span></button>
+          <button type="button" data-act="kbd" aria-pressed="false">${I.kbd}<span>Type</span></button>
+          <button type="button" data-act="later">${I.close}<span>Not now</span></button>
+        </div>
+      </footer>`);
+    const stage = $('.cvstage', el); const img = $('.cvimg', el); const dot = $('.cvdot', el);
+    const msg = $('.cvmsg', el); const doneEl = $('.cvdone', el); const liveEl = $('.cvlive', el); const t2 = $('.t2', el);
+    const typeRow = $('.cvtype', el); const tin = $('.cvin', el);
+    let alive = true; let status = 'open';
+    let vp = null; let box = null; let want = null; let shown = null;
+    let reqSeq = 0; let paintedSeq = 0; const paints = [];
+    let pinch = null; let finger = null; let unwatch = () => {};
+
+    function paintMeta() {
+      const m = meta || {};
+      t2.textContent = [m.siteName, m.chrome, m.where || (machine === 'mac' ? (store.macName || 'Mac') : 'Windows')].filter(Boolean).join(' · ');
+    }
+    function setLive(text, cls) { liveEl.className = `cvlive ${cls || ''}`; $('span', liveEl).textContent = text; }
+    function showMsg(t) { msg.textContent = t; msg.hidden = !t; }
+    const stageBox = () => { const b = stage.getBoundingClientRect(); return { w: b.width, h: b.height, l: b.left, t: b.top }; };
+    // a part of the tab shaped like the stage (so the picture fills it), inside the tab
+    function fit(r) {
+      if (!vp) return r;
+      const S = stageBox(); const a = S.w / Math.max(1, S.h);
+      let w = Math.max(60, r.w); let h = Math.max(40, r.h);
+      const cx = r.x + r.w / 2; const cy = r.y + r.h / 2;
+      if (w / h < a) w = h * a; else h = w / a;
+      if (w > vp.w) { w = vp.w; h = w / a; }
+      if (h > vp.h) { h = vp.h; w = Math.min(vp.w, h * a); }
+      return { x: Math.max(0, Math.min(vp.w - w, cx - w / 2)), y: Math.max(0, Math.min(vp.h - h, cy - h / 2)), w, h };
+    }
+    function place() {
+      if (!shown) return;
+      const S = stageBox(); const r = shown.region;
+      const k = Math.min(S.w / r.w, S.h / r.h); const dw = r.w * k; const dh = r.h * k;
+      shown.k = k; shown.ox = (S.w - dw) / 2; shown.oy = (S.h - dh) / 2;
+      Object.assign(img.style, { width: `${dw}px`, height: `${dh}px`, left: `${shown.ox}px`, top: `${shown.oy}px` });
+    }
+    function paint(f) {
+      return new Promise((ok) => {
+        const im = new Image();
+        im.onload = im.onerror = () => {
+          if (!alive) return ok();
+          img.src = im.src; shown = { region: f.region }; place();
+          if (!pinch) img.style.transform = '';
+          img.classList.add('on');
+          ok();
+        };
+        im.src = `data:image/jpeg;base64,${f.img}`;
+      });
+    }
+    function toPage(cx, cy) {
+      if (!shown || !shown.k) return null;
+      const S = stageBox();
+      const x = shown.region.x + (cx - S.l - shown.ox) / shown.k; const y = shown.region.y + (cy - S.t - shown.oy) / shown.k;
+      if (!vp) return { x, y };
+      return { x: Math.max(0, Math.min(vp.w - 1, x)), y: Math.max(0, Math.min(vp.h - 1, y)) };
+    }
+    function onStatus(f) {
+      if (!f || !f.status || f.status === status) return;
+      status = f.status;
+      if (status === 'open') return;
+      const t = status === 'solved' ? ['Solved', 'The job waiting on it carries on by itself.', 'ok']
+        : status === 'dismissed' ? ['Set aside', 'The job waiting on it stops that part.', '']
+          : ['It went away', 'The tab with the check was closed.', ''];
+      doneEl.innerHTML = `<div class="cvdbox ${t[2]}">${t[2] ? `<span class="cvtick">${I.check}</span>` : ''}<b>${t[0]}${t[2] ? ' ✓' : ''}</b><span>${t[1]}</span><button class="btn secondary" data-act="back">Back to sessions</button></div>`;
+      doneEl.hidden = false; showMsg('');
+      setLive(status === 'solved' ? 'Solved' : 'Closed', status === 'solved' ? 'ok' : 'off');
+      if (cvLoop) cvLoop.kick();
+    }
+    async function frameLoop() {
+      while (alive && status === 'open') {
+        if (document.hidden) { await sleep(600); continue; }
+        const my = ++reqSeq; const S = stageBox();
+        const q = want ? `x=${Math.round(want.x)}&y=${Math.round(want.y)}&w=${Math.round(want.w)}&h=${Math.round(want.h)}&` : '';
+        const px = Math.round(Math.max(320, Math.min(1400, S.w * (window.devicePixelRatio || 2))));
+        try {
+          const f = await api('GET', `${base}/frame?${q}px=${px}&q=${finger || pinch ? 50 : 62}`, undefined, { timeout: 15000 });
+          if (!alive) return;
+          onStatus(f);
+          if (f.status && f.status !== 'open') return;
+          if (f.viewport) vp = f.viewport;
+          if (f.box !== undefined) box = f.box;
+          if (!want && vp) want = fit(box || { x: 0, y: 0, w: vp.w, h: vp.h }); // (first look: zoomed on the check)
+          if (f.img && my > paintedSeq) {
+            paintedSeq = my; await paint(f);
+            const now = Date.now(); paints.push(now); while (paints.length && now - paints[0] > 3000) paints.shift();
+            setLive(`Live · ${Math.max(1, Math.round(paints.length / 3))}/s`, 'on');
+          }
+          showMsg('');
+        } catch (e) {
+          if (!alive) return;
+          if (e.status === 404) { onStatus({ status: 'gone' }); return; }
+          setLive('Reconnecting…', 'off');
+          showMsg(e.offline ? 'Can\'t reach your Mac right now. Trying again…' : e.message || 'Something went wrong. Trying again…');
+          await sleep(1500);
+        }
+      }
+    }
+
+    // ----- his finger -> the page's mouse (pieces of a drag go every 50 ms, each point with its time) -----
+    const send = (path, body) => api('POST', `${base}${path}`, body, { timeout: 10000 });
+    function flush(f) {
+      if (!f || !f.pending.length) return;
+      const events = f.pending.splice(0);
+      send('/input', { g: f.g, seq: f.seq++, events }).then((r) => { if (r && r.status) onStatus(r); }).catch((e) => { if (e.status === 404) onStatus({ status: 'gone' }); else toast(e.offline ? 'Can\'t reach your Mac' : e.message, 'err'); });
+    }
+    function showDot(cx, cy, on) {
+      const S = stageBox();
+      dot.style.transform = `translate(${cx - S.l}px, ${cy - S.t}px)`;
+      dot.hidden = false; dot.classList.toggle('on', !!on);
+    }
+    function startFinger() {
+      const f = finger; if (!f || f.started) return;
+      f.started = true; clearTimeout(f.wait); flush(f);
+      f.iv = setInterval(() => flush(f), 50);
+    }
+    function endFinger(cx, cy) {
+      const f = finger; if (!f) return; finger = null;
+      const p = toPage(cx, cy) || f.last;
+      f.pending.push({ type: 'up', x: p.x, y: p.y, t: Math.round(performance.now() - f.t0) });
+      f.started = true; clearTimeout(f.wait); clearInterval(f.iv); flush(f);
+      dot.classList.remove('on'); setTimeout(() => { if (!finger) dot.hidden = true; }, 350);
+    }
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const mid = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    function startPinch(a, b) {
+      if (!shown || !shown.k) return;
+      const m = mid(a, b);
+      pinch = { d0: Math.max(10, dist(a, b)), m0: m, m, s: 1, p0: toPage(m.x, m.y), k: shown.k, ox: shown.ox, oy: shown.oy, region: shown.region };
+      img.style.transformOrigin = '0 0';
+    }
+    function movePinch(a, b) {
+      const P = pinch; if (!P || !P.p0) return;
+      const S = stageBox(); const m = mid(a, b);
+      const minK = vp ? Math.min(S.w / vp.w, S.h / vp.h) : 0.1; const maxK = S.w / 60;
+      P.s = Math.max(minK / P.k, Math.min(maxK / P.k, dist(a, b) / P.d0)); P.m = m;
+      const u0 = (P.p0.x - P.region.x) * P.k; const v0 = (P.p0.y - P.region.y) * P.k;
+      const tx = m.x - S.l - P.ox - u0 * P.s; const ty = m.y - S.t - P.oy - v0 * P.s;
+      img.style.transform = `translate(${tx}px, ${ty}px) scale(${P.s})`;
+    }
+    function endPinch() {
+      const P = pinch; pinch = null; if (!P || !P.p0 || !vp) return;
+      const S = stageBox(); const k = P.k * P.s;
+      want = fit({ x: P.p0.x - (P.m.x - S.l) / k, y: P.p0.y - (P.m.y - S.t) / k, w: S.w / k, h: S.h / k });
+    }
+    stage.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (status !== 'open') return;
+      const ts = e.touches;
+      if (ts.length >= 2) {
+        if (finger && !finger.started) { clearTimeout(finger.wait); finger = null; dot.hidden = true; } // (two fingers landing: a zoom, not a click)
+        if (!finger && !pinch) startPinch(ts[0], ts[1]);
+        return;
+      }
+      if (pinch || finger) return;
+      const t = e.changedTouches[0]; const p = toPage(t.clientX, t.clientY);
+      if (!p) return;
+      finger = { id: t.identifier, g: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, seq: 0, t0: performance.now(), pending: [{ type: 'down', x: p.x, y: p.y, t: 0 }], started: false, last: p };
+      finger.wait = setTimeout(startFinger, 90); // (a second finger within 90 ms makes it a zoom)
+      showDot(t.clientX, t.clientY, true);
+    }, { passive: false });
+    stage.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (pinch && e.touches.length >= 2) { movePinch(e.touches[0], e.touches[1]); return; }
+      const f = finger; if (!f) return;
+      const t = [...e.changedTouches].find((x) => x.identifier === f.id); if (!t) return;
+      const p = toPage(t.clientX, t.clientY); if (!p) return;
+      if (Math.abs(p.x - f.last.x) < 0.5 && Math.abs(p.y - f.last.y) < 0.5) return;
+      f.pending.push({ type: 'move', x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10, t: Math.round(performance.now() - f.t0) });
+      f.last = p; showDot(t.clientX, t.clientY, true);
+    }, { passive: false });
+    const touchEnd = (e) => {
+      e.preventDefault();
+      if (pinch) { if (e.touches.length < 2) endPinch(); return; }
+      const f = finger; if (!f) return;
+      const t = [...e.changedTouches].find((x) => x.identifier === f.id); if (!t) return;
+      endFinger(t.clientX, t.clientY);
+    };
+    stage.addEventListener('touchend', touchEnd, { passive: false });
+    stage.addEventListener('touchcancel', touchEnd, { passive: false });
+    // (a computer's mouse, for testing in a desktop browser: the same path)
+    stage.addEventListener('mousedown', (e) => {
+      if (status !== 'open' || e.button !== 0) return;
+      const p = toPage(e.clientX, e.clientY); if (!p) return;
+      finger = { id: 'mouse', g: `${Date.now().toString(36)}m`, seq: 0, t0: performance.now(), pending: [{ type: 'down', x: p.x, y: p.y, t: 0 }], started: false, last: p };
+      startFinger(); showDot(e.clientX, e.clientY, true);
+    });
+    window.addEventListener('mousemove', function mm(e) {
+      if (!alive) { window.removeEventListener('mousemove', mm); return; }
+      const f = finger; if (!f || f.id !== 'mouse') return;
+      const p = toPage(e.clientX, e.clientY); if (!p) return;
+      f.pending.push({ type: 'move', x: p.x, y: p.y, t: Math.round(performance.now() - f.t0) }); f.last = p; showDot(e.clientX, e.clientY, true);
+    });
+    window.addEventListener('mouseup', function mu(e) {
+      if (!alive) { window.removeEventListener('mouseup', mu); return; }
+      if (finger && finger.id === 'mouse') endFinger(e.clientX, e.clientY);
+    });
+
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-act]'); if (!b) return;
+      const act = b.dataset.act;
+      if (act === 'back') back('#/');
+      else if (act === 'zbox') { if (!vp) return; if (!box) toast('Couldn\'t find the check on the page; here is the whole tab.'); want = fit(box || { x: 0, y: 0, w: vp.w, h: vp.h }); }
+      else if (act === 'zall') { if (vp) want = fit({ x: 0, y: 0, w: vp.w, h: vp.h }); }
+      else if (act === 'kbd') { typeRow.hidden = !typeRow.hidden; b.setAttribute('aria-pressed', String(!typeRow.hidden)); if (!typeRow.hidden) tin.focus(); }
+      else if (act === 'tsend') typeIt();
+      else if (act === 'kenter' || act === 'kback') { try { await send('/key', { key: act === 'kenter' ? 'Enter' : 'Backspace' }); } catch (err) { toast(err.message, 'err'); } }
+      else if (act === 'later') {
+        if (!confirm('Set this robot check aside? The job waiting on it stops that part.')) return;
+        try { await send('/dismiss', {}); onStatus({ status: 'dismissed' }); } catch (err) { toast(err.message, 'err'); }
+      }
+    });
+    async function typeIt() {
+      const text = tin.value; if (!text) return;
+      try { await send('/type', { text }); tin.value = ''; toast('Typed into the page'); } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); }
+    }
+    tin.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); typeIt(); } });
+
+    paintMeta();
+    return {
+      el,
+      mounted() {
+        const unbars = watchBars(el);
+        const ro = window.ResizeObserver ? new ResizeObserver(() => place()) : null; if (ro) ro.observe(stage);
+        unwatch = () => { unbars(); if (ro) ro.disconnect(); };
+        api('GET', base).then((m) => { meta = m; paintMeta(); onStatus(m); }).catch((e) => { if (e.status === 404) onStatus({ status: 'gone' }); });
+        frameLoop(); setTimeout(() => { if (alive) frameLoop(); }, 180); // (two pictures on the way at once: more of them per second)
+      },
+      onViewport() { place(); },
+      destroy() { alive = false; unwatch(); if (finger) { clearTimeout(finger.wait); clearInterval(finger.iv); } },
+    };
+  }
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* fine without it */ });
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data || {};
-      if (d.type === 'open') go(d.sessionId ? `#/s/${encodeURIComponent(d.sessionId)}` : '#/', 'push');
+      if (d.type === 'open') go(d.hash && /^#\/cv\//.test(d.hash) ? d.hash : d.sessionId ? `#/s/${encodeURIComponent(d.sessionId)}` : '#/', 'push');
     });
   }
 
