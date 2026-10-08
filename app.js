@@ -405,7 +405,9 @@
         base = nb;
       } catch (e) { break; }
     }
-    setConn('offline');
+    // one missed answer is a blip (mobile data, a busy Mac): keep "Reconnecting…" while the Mac answered in the last
+    // 25 s; the polls carry on, and only a longer silence shows "Mac is offline or asleep"
+    setConn(store.lastSeen && Date.now() - store.lastSeen < 25000 ? 'reconnecting' : 'offline');
     throw new ApiError('Can\'t reach your Mac', 0, true);
   }
 
