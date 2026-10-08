@@ -1515,7 +1515,20 @@
       }
       return out;
     }
+    function joinPcm(parts) {
+      const n = parts.reduce((a, p) => a + p.length, 0);
+      const pcm = new Int16Array(n); let o = 0; for (const p of parts) { pcm.set(p, o); o += p.length; }
+      return pcm;
+    }
+    const micSeq = () => !!(data.hello && (data.hello.features || []).includes('micseq'));
     async function pump(r, all) {
+      if (micSeq() && !all) { // (numbered pieces: each goes at once, the Mac puts them in order)
+        if (!r.queue.length || !r.id) return;
+        const seq = r.seq++; const pcm = joinPcm(r.queue.splice(0));
+        const x = await api('POST', `/mic/${r.id}/audio?seq=${seq}`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000 });
+        if (rec === r && x && x.text && seq >= (r.shown || 0)) { r.shown = seq; mtext.textContent = x.text; }
+        return;
+      }
       if (r.sending) return; r.sending = true;
       try {
         while (r.queue.length && r.id) {
@@ -1537,7 +1550,7 @@
     async function micStart() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This phone can\'t record here.', 'err'); return; }
-      const r = { id: null, ctx: new AC(), queue: [] }; // (the sound system is made in the tap itself: iOS wants that)
+      const r = { id: null, ctx: new AC(), queue: [], seq: 0 }; // (the sound system is made in the tap itself: iOS wants that)
       rec = r; mtext.textContent = 'Listening…'; paintMic();
       try {
         const [stream, started] = await Promise.all([
@@ -1565,19 +1578,32 @@
       rec = null; micOff(r); paintMic();
       if (!r.id) return;
       micBtn.disabled = true; box.placeholder = 'Writing it down…';
-      try {
-        while (r.sending) await sleep(50);
-        await pump(r, true);
-        const x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000 });
-        const t = String((x && x.text) || '').trim();
-        if (!t) { toast('Heard nothing.'); return; }
-        const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
-        const before = box.value.slice(0, a); const after = box.value.slice(b);
-        const ins = (before && !/\s$/.test(before) ? ' ' : '') + t + (after && !/^\s/.test(after) ? ' ' : '');
+      const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
+      const before = box.value.slice(0, a); const after = box.value.slice(b);
+      const put = (t) => { // (t where the cursor was; called again to swap the words so far for Grok's final text)
+        const ins = t ? (before && !/\s$/.test(before) ? ' ' : '') + t + (after && !/^\s/.test(after) ? ' ' : '') : '';
         box.value = before + ins + after;
         const c = (before + ins).length; try { box.setSelectionRange(c, c); } catch (e) {}
         lsSet(draftKey, box.value); grow();
-      } catch (e) { toast(e.offline ? 'Can\'t reach your Mac. Nothing was written down.' : e.message, 'err'); }
+        return box.value;
+      };
+      const heard = (mtext.textContent || '').trim();
+      const shown = heard && heard !== 'Listening…' ? put(heard) : null; // (in the box at once, like F5)
+      try {
+        let x;
+        if (micSeq()) { // (the last piece rides with the end: one trip to the Mac)
+          const tail = joinPcm(r.queue.splice(0));
+          x = await api('POST', `/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([tail.buffer]), timeout: 30000 });
+        } else {
+          while (r.sending) await sleep(50);
+          await pump(r, true);
+          x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000 });
+        }
+        const t = String((x && x.text) || '').trim();
+        if (shown != null && box.value !== shown) return; // (typed in the box meanwhile: leave it)
+        if (!t && shown == null) { toast('Heard nothing.'); return; }
+        put(t || heard);
+      } catch (e) { toast(e.offline ? `Can't reach your Mac. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
       finally { micBtn.disabled = false; box.placeholder = 'Message'; }
     }
     micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
