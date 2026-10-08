@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '1.1';
+  const APP_VERSION = '1.2';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -44,6 +44,9 @@
     sessions: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="20" height="17" rx="3.5"/><path d="m7.5 10.5 3 2.5-3 2.5M13 16h5"/></svg>',
     folder: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h4.6l2.4 2.6h8A2.5 2.5 0 0 1 23 10.1v9.4a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 3 19.5z"/></svg>',
     gear: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="13" r="3.4"/><path d="M13 2.8v2.4M13 20.8v2.4M2.8 13h2.4M20.8 13h2.4M5.8 5.8l1.7 1.7M18.5 18.5l1.7 1.7M5.8 20.2l1.7-1.7M18.5 7.5l1.7-1.7"/></svg>',
+    photo: '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2.5" y="4.5" width="17" height="13" rx="2.6"/><circle cx="8" cy="9.5" r="1.7"/><path d="m3 16 5-4.5 3.5 3 3-2.5 4.5 4" stroke-linecap="round"/></svg>',
+    mic: '<svg width="20" height="22" viewBox="0 0 20 22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="6.5" y="2" width="7" height="11.5" rx="3.5"/><path d="M3.5 10.5a6.5 6.5 0 0 0 13 0M10 17v3"/></svg>',
+    stop: '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="11" height="11" rx="2.5" fill="currentColor"/></svg>',
     send: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15V3M3.5 8.5 9 3l5.5 5.5"/></svg>',
     share: '<svg width="20" height="22" viewBox="0 0 20 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13V2M6 5.5 10 1.6l4 3.9"/><path d="M6.5 8.5H4.5a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4.5 20.5h11a1.5 1.5 0 0 0 1.5-1.5v-9a1.5 1.5 0 0 0-1.5-1.5h-2"/></svg>',
     plusbox: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="2" width="16" height="16" rx="4"/><path d="M10 6.5v7M6.5 10h7"/></svg>',
@@ -257,13 +260,14 @@
       let bad = false;
       try {
         const headers = {};
-        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        if (opts.raw) headers['Content-Type'] = opts.type || 'application/octet-stream'; // (a photo, a piece of sound)
+        else if (body !== undefined) headers['Content-Type'] = 'application/json';
         if (auth && store.token) headers.Authorization = `Bearer ${store.token}`;
         const ctl = window.AbortController ? new AbortController() : null;
         const timer = ctl ? setTimeout(() => ctl.abort(), opts.timeout || 15000) : null;
         res = await fetch(`${base}/phone/api${path}`, {
           method, headers, mode: 'cors', cache: 'no-store', credentials: 'omit',
-          body: body !== undefined ? JSON.stringify(body) : undefined,
+          body: opts.raw ? opts.raw : body !== undefined ? JSON.stringify(body) : undefined,
           signal: ctl ? ctl.signal : undefined,
         });
         const text = await res.text();
@@ -787,8 +791,12 @@
         <div class="hint"></div>
         <div class="mpanel" hidden></div>
         <div class="mbar" hidden><button class="mchip" data-act="mchip" aria-expanded="false" aria-label="Model and effort"><span class="ml"></span>${I.chev}</button></div>
+        <div class="micline" hidden><span class="mdot"></span><span class="mtext">Listening…</span><button class="mcancel" data-act="mcancel" aria-label="Cancel recording">${I.close}</button></div>
+        <div class="photos" hidden></div>
         <div class="crow-in">
+          <button class="cbtn pbtn" data-act="photo" aria-label="Add photos">${I.photo}</button><input class="pfile" type="file" accept="image/*" multiple hidden>
           <textarea class="inbox" rows="1" placeholder="Message" enterkeyhint="enter" autocapitalize="sentences" aria-label="Message"></textarea>
+          <button class="cbtn micbtn" data-act="mic" aria-label="Talk (Grok mic)">${I.mic}</button>
           <button class="send" data-act="send" aria-label="Send" disabled><span>${I.send}</span></button>
         </div>
       </footer>`);
@@ -1086,8 +1094,141 @@
       box.style.height = 'auto';
       const h = Math.min(box.scrollHeight + 1, Math.round(LINE * 6 + 20));
       box.style.height = `${Math.max(42, h)}px`;
-      sendBtn.disabled = !box.value.trim();
+      sendBtn.disabled = !box.value.trim() && !shots.length;
     }
+
+    // ----- photos: picked on the phone, made smaller (2048 px, JPEG), sent to the session's computer at once; the
+    // message then carries them (Claude shows [Image #n]) -----
+    const photosEl = $('.photos', el); const pfile = $('.pfile', el);
+    let shots = []; // { key, url, state: 'up' | 'ok' | 'err', photoId, job }
+    function paintShots() {
+      photosEl.hidden = !shots.length;
+      photosEl.innerHTML = shots.map((p) => `<div class="shot ${p.state}" data-key="${p.key}"><img src="${p.url}" alt=""><button class="shotx" data-act="shotx" aria-label="Remove photo">${I.close}</button>${p.state === 'up' ? '<i class="spin"></i>' : p.state === 'err' ? '<b>!</b>' : ''}</div>`).join('');
+      grow();
+    }
+    function shrinkPhoto(file) {
+      return new Promise((res) => {
+        if (/gif/.test(file.type)) { res(file); return; }
+        const url = URL.createObjectURL(file); const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight));
+          const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+          c.toBlob((b) => res(b || file), 'image/jpeg', 0.86);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); res(file); };
+        img.src = url;
+      });
+    }
+    function addPhotos(files) {
+      for (const f of [...files].slice(0, Math.max(0, 20 - shots.length))) {
+        const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), state: 'up', photoId: null };
+        const name = encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, ''));
+        p.job = shrinkPhoto(f)
+          .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${name}`, undefined, { raw: b, type: /^image\/(png|gif|webp|jpeg)$/.test(b.type) ? b.type : 'image/jpeg', timeout: 120000 }))
+          .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your Mac. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
+          .then(paintShots);
+        shots.push(p);
+      }
+      paintShots();
+    }
+    $('[data-act="photo"]', el).addEventListener('click', () => pfile.click());
+    pfile.addEventListener('change', () => { if (pfile.files && pfile.files.length) addPhotos(pfile.files); pfile.value = ''; });
+    photosEl.addEventListener('click', (e) => {
+      const x = e.target.closest('[data-act="shotx"]'); if (!x) return;
+      const k = x.closest('.shot').dataset.key; const p = shots.find((q) => q.key === k);
+      shots = shots.filter((q) => q !== p); if (p) URL.revokeObjectURL(p.url);
+      paintShots();
+    });
+
+    // ----- the mic: Grok Voice Transcribe, the same as F5 on the Mac. Tap to talk, tap again to stop: the words go
+    // into the box where the cursor is (not sent), like F5. The sound goes to the Mac in pieces while you speak. -----
+    const micBtn = $('.micbtn', el); const micline = $('.micline', el); const mtext = $('.mtext', el);
+    let rec = null; // { id, ctx, stream, proc, queue, sending, tick }
+    function paintMic() {
+      micBtn.hidden = !!(data.hello && data.hello.mic === false);
+      micBtn.classList.toggle('on', !!rec); micBtn.innerHTML = rec ? I.stop : I.mic;
+      micBtn.setAttribute('aria-label', rec ? 'Stop and put the words in the box' : 'Talk (Grok mic)');
+      micline.hidden = !rec;
+    }
+    function to16k(f32, rate) {
+      const r = rate / 16000; const n = Math.floor(f32.length / r); const out = new Int16Array(n);
+      for (let i = 0; i < n; i++) {
+        const a = Math.floor(i * r); const b = Math.max(a + 1, Math.min(f32.length, Math.floor((i + 1) * r)));
+        let sum = 0; for (let j = a; j < b; j++) sum += f32[j];
+        out[i] = Math.max(-1, Math.min(1, sum / (b - a))) * 0x7fff;
+      }
+      return out;
+    }
+    async function pump(r, all) {
+      if (r.sending) return; r.sending = true;
+      try {
+        while (r.queue.length && r.id) {
+          const parts = r.queue.splice(0); const n = parts.reduce((a, p) => a + p.length, 0);
+          const pcm = new Int16Array(n); let o = 0; for (const p of parts) { pcm.set(p, o); o += p.length; }
+          const x = await api('POST', `/mic/${r.id}/audio`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000 });
+          if (rec === r && x && x.text) mtext.textContent = x.text;
+          if (!all) break;
+        }
+      } finally { r.sending = false; }
+    }
+    function micOff(r) {
+      clearInterval(r.tick);
+      try { if (r.proc) r.proc.disconnect(); } catch (e) {}
+      try { if (r.stream) r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+      try { if (r.ctx) r.ctx.close(); } catch (e) {}
+    }
+    function micDrop(r) { if (r.id) api('DELETE', `/mic/${r.id}`).catch(() => {}); }
+    async function micStart() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This phone can\'t record here.', 'err'); return; }
+      const r = { id: null, ctx: new AC(), queue: [] }; // (the sound system is made in the tap itself: iOS wants that)
+      rec = r; mtext.textContent = 'Listening…'; paintMic();
+      try {
+        const [stream, started] = await Promise.all([
+          navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }),
+          api('POST', '/mic', {}),
+        ]);
+        r.stream = stream; r.id = started.id;
+        if (rec !== r) { micOff(r); micDrop(r); return; } // (cancelled meanwhile)
+        await r.ctx.resume();
+        const src = r.ctx.createMediaStreamSource(stream);
+        r.proc = r.ctx.createScriptProcessor(4096, 1, 1);
+        r.proc.onaudioprocess = (e) => { if (rec === r) r.queue.push(to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate)); };
+        src.connect(r.proc); r.proc.connect(r.ctx.destination);
+        r.tick = setInterval(() => { pump(r).catch((e) => micFail(r, e)); }, 250);
+      } catch (e) { micFail(r, e); }
+    }
+    function micFail(r, e) {
+      if (rec !== r) return;
+      rec = null; micOff(r); micDrop(r); paintMic();
+      toast(e && e.name === 'NotAllowedError' ? 'The mic is blocked for this app. Allow the microphone when it asks (or in Settings), then try again.'
+        : e && e.offline ? 'Can\'t reach your Mac.' : `Mic: ${(e && e.message) || e}`, 'err');
+    }
+    async function micStop() {
+      const r = rec; if (!r) return;
+      rec = null; micOff(r); paintMic();
+      if (!r.id) return;
+      micBtn.disabled = true; box.placeholder = 'Writing it down…';
+      try {
+        while (r.sending) await sleep(50);
+        await pump(r, true);
+        const x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000 });
+        const t = String((x && x.text) || '').trim();
+        if (!t) { toast('Heard nothing.'); return; }
+        const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
+        const before = box.value.slice(0, a); const after = box.value.slice(b);
+        const ins = (before && !/\s$/.test(before) ? ' ' : '') + t + (after && !/^\s/.test(after) ? ' ' : '');
+        box.value = before + ins + after;
+        const c = (before + ins).length; try { box.setSelectionRange(c, c); } catch (e) {}
+        lsSet(draftKey, box.value); grow();
+      } catch (e) { toast(e.offline ? 'Can\'t reach your Mac. Nothing was written down.' : e.message, 'err'); }
+      finally { micBtn.disabled = false; box.placeholder = 'Message'; }
+    }
+    micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
+    micBtn.addEventListener('click', () => { if (rec) micStop(); else micStart(); });
+    $('[data-act="mcancel"]', el).addEventListener('click', () => { const r = rec; if (!r) return; rec = null; micOff(r); micDrop(r); paintMic(); });
+    paintMic();
     let draftTimer = null;
     box.addEventListener('input', () => {
       grow();
@@ -1100,19 +1241,26 @@
 
     async function send() {
       const text = box.value;
-      if (!text.trim()) return;
+      if (!text.trim() && !shots.length) return;
+      const sent = shots; // (photos still on their way are waited for)
+      if (sent.some((x) => x.state === 'up')) { sendBtn.disabled = true; toast('Sending the photos…'); await Promise.all(sent.map((x) => x.job)); }
+      if (sent.some((x) => x.state === 'err')) { grow(); toast('A photo didn\'t make it. Remove it (✕) or add it again.', 'err'); return; }
+      if (shots !== sent) return; // (changed meanwhile)
+      const photos = sent.map((x) => x.photoId);
+      shots = []; paintShots();
       box.value = '';
       grow();
       lsSet(draftKey, '');
       const userTexts = chat.messages.filter((m) => m.role === 'user').map((m) => (m.text || '').trim());
-      const p = { text, sentAt: Date.now(), status: 'sending', baseCount: userTexts.filter((t) => t === text.trim()).length };
+      const label = text.trim() + (photos.length ? `${text.trim() ? '\n' : ''}[${photos.length} image${photos.length > 1 ? 's' : ''}]` : ''); // (as the chat shows it)
+      const p = { text: label, sentAt: Date.now(), status: 'sending', baseCount: userTexts.filter((t) => t === label).length };
       const list = pendingBySession.get(id) || [];
       list.push(p);
       pendingBySession.set(id, list);
       atBottom = true;
       if (tab === 'chat') renderChat();
       try {
-        const r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text });
+        const r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...(photos.length ? { photos } : {}) });
         p.status = r && r.queued ? 'queued' : 'sent';
         if (tab === 'screen') toast(p.status === 'queued' ? 'Will send when it\'s ready' : 'Sent');
         if (tab === 'chat') renderChat();
@@ -1120,7 +1268,8 @@
       } catch (e) {
         const l2 = (pendingBySession.get(id) || []).filter((x) => x !== p);
         pendingBySession.set(id, l2);
-        if (!box.value.trim()) box.value = text; else box.value = `${text}\n${box.value}`;
+        if (!box.value.trim()) box.value = text; else if (text.trim()) box.value = `${text}\n${box.value}`;
+        shots = sent.concat(shots); paintShots();
         lsSet(draftKey, box.value);
         grow();
         if (tab === 'chat') renderChat();
@@ -1172,6 +1321,8 @@
         if (qLoop) qLoop.stop();
         clearTimeout(draftTimer);
         lsSet(draftKey, box.value);
+        if (rec) { const r = rec; rec = null; micOff(r); micDrop(r); }
+        for (const p of shots) URL.revokeObjectURL(p.url);
         unwatch();
       },
     };
