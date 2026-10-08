@@ -1660,6 +1660,45 @@
 
     el.addEventListener('click', (e) => { if (e.target.closest('[data-act="back"]')) back('#/'); });
 
+    // ----- swipe right from anywhere = the back arrow (owner 8 Oct: thumb-friendly, start mid-screen) -----
+    // Not from the box, a sheet, or something that can still scroll left (a wide code block / the terminal).
+    {
+      let sw = null;
+      const canScrollLeft = (n) => { for (; n && n !== el; n = n.parentElement) if (n.scrollLeft > 0 && n.scrollWidth > n.clientWidth) return true; return false; };
+      el.addEventListener('touchstart', (e) => {
+        sw = null;
+        if (e.touches.length !== 1 || curSheet || closing) return;
+        const t = e.target;
+        if (t.closest('textarea, input, select, .sheet, .jump') || canScrollLeft(t)) return;
+        sw = { x: e.touches[0].clientX, y: e.touches[0].clientY, on: false, dx: 0, trail: [] };
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (!sw) return;
+        const dx = e.touches[0].clientX - sw.x; const dy = e.touches[0].clientY - sw.y;
+        if (!sw.on) {
+          if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; } // (scrolling the chat)
+          if (dx > 14 && dx > Math.abs(dy) * 1.5) { sw.on = true; el.style.transition = 'none'; } else return;
+        }
+        e.preventDefault();
+        sw.dx = Math.max(0, dx);
+        const now = Date.now(); sw.trail.push({ dx: sw.dx, t: now }); while (sw.trail.length > 2 && now - sw.trail[0].t > 100) sw.trail.shift(); // (speed over the last 0.1 s)
+        el.style.transform = `translateX(${sw.dx}px)`;
+      }, { passive: false });
+      const done = () => {
+        if (!sw || !sw.on) { sw = null; return; }
+        const f = sw.trail[0] || { dx: 0, t: Date.now() - 1 };
+        const fast = sw.dx > 40 && (sw.dx - f.dx) / Math.max(1, Date.now() - f.t) > 0.5; // (a flick)
+        const go = sw.dx > Math.min(120, el.clientWidth * 0.3) || fast;
+        sw = null;
+        el.style.transition = 'transform .18s ease-out';
+        el.style.transform = go ? 'translateX(100%)' : '';
+        if (go) setTimeout(() => back('#/'), 150);
+        else setTimeout(() => { el.style.transition = ''; }, 200);
+      };
+      el.addEventListener('touchend', done);
+      el.addEventListener('touchcancel', () => { if (sw && sw.on) { sw.dx = 0; } done(); });
+    }
+
     // ----- close the window (like its ✕ on the computer: stops it and frees its memory) -----
     let closing = false;
     el.addEventListener('click', (e) => { const b = e.target.closest('[data-act="close"]'); if (b) closeWindow(b); });
