@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '1.2';
+  const APP_VERSION = '6.0';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -54,6 +54,31 @@
     down: '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v10M2.5 7.5 7 12l4.5-4.5"/></svg>',
     close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
     warn: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.8 15 14H1z"/><path d="M8 6.5v3.2M8 12h.01"/></svg>',
+    // v6
+    usage: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 8h18M4 13h18M4 18h18" opacity=".35"/><path d="M4 8h12M4 13h7M4 18h15"/></svg>',
+    bell: '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 15.5V10a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M9 19.5a2 2 0 0 0 4 0"/></svg>',
+    more: '<svg width="22" height="22" viewBox="0 0 22 22" fill="currentColor"><circle cx="4.5" cy="11" r="1.8"/><circle cx="11" cy="11" r="1.8"/><circle cx="17.5" cy="11" r="1.8"/></svg>',
+    search: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="m10.6 10.6 3.6 3.6"/></svg>',
+    xsmall: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 2l6 6M8 2 2 8"/></svg>',
+    refresh: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6"/><path d="M16.5 3v3.6h-3.6"/></svg>',
+    sparkle: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 1.8 8.3 5.7 12.2 7 8.3 8.3 7 12.2 5.7 8.3 1.8 7 5.7 5.7z"/><path d="M12.6 10.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" fill="currentColor" stroke-width="0"/></svg>',
+    up: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l5-5 5 5"/></svg>',
+    dn: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l5 5 5-5"/></svg>',
+    check: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5l3.5 3.5 7.5-8"/></svg>',
+    pencil: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.2l3.3 3.3L7 16.3H3.7V13z"/></svg>',
+    swap: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7h12l-3-3M16.5 13h-12l3 3"/></svg>',
+    person: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="7" r="3.3"/><path d="M3.8 17c.8-3.2 3.3-5 6.2-5s5.4 1.8 6.2 5"/></svg>',
+    restart: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6"/><path d="M3.5 3v3.6h3.6"/></svg>',
+    copy2: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="6.5" y="6.5" width="10" height="10" rx="2.2"/><path d="M13.5 3.5h-8a2 2 0 0 0-2 2v8"/></svg>',
+    moon: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M10 3.2v1.6M10 15.2v1.6M3.2 10h1.6M15.2 10h1.6M5.2 5.2l1.1 1.1M13.7 13.7l1.1 1.1M5.2 14.8l1.1-1.1M13.7 6.3l1.1-1.1" stroke-linecap="round"/><circle cx="10" cy="10" r="3"/></svg>',
+    xbig: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg>',
+    reopen: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.5 3.5 8.5l4 4"/><path d="M3.5 8.5h8.5a4.5 4.5 0 0 1 0 9H9"/></svg>',
+    computer: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2.5" y="3.5" width="15" height="10" rx="1.8"/><path d="M7 17h6M10 13.5V17" stroke-linecap="round"/></svg>',
+    power: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9 2v6.5"/><path d="M5.2 4.6a6 6 0 1 0 7.6 0"/></svg>',
+    k_claude: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M10 2.5v15M2.5 10h15M4.7 4.7l10.6 10.6M15.3 4.7 4.7 15.3"/></svg>',
+    k_codex: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 6 3 10l4 4M13 6l4 4-4 4"/></svg>',
+    k_grok: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M5 15 15.5 4.5"/></svg>',
+    k_term: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><path d="m6 8 2.5 2L6 12M10.5 12.5h3.5"/></svg>',
     // tool icons
     t_term: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="m4.5 6.5 2 1.5-2 1.5M8.5 10h3"/></svg>',
     t_file: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3.5 1.8h6l3 3v9.4h-9z"/><path d="M9.5 1.8v3h3M5.8 8.5h4.4M5.8 11h4.4" stroke-linecap="round"/></svg>',
@@ -122,14 +147,98 @@
   }
   const machineTag = (s) => `<span class="mtag ${s.machine === 'pc' ? 'pc' : ''}">${esc(s.machineName || (s.machine === 'pc' ? 'Windows' : 'Mac'))}</span>`;
 
-  function toast(msg, kind) {
+  // "3h 20m" until a time (usage resets)
+  function until(ms) {
+    if (!ms) return '';
+    const m = Math.max(0, Math.round((ms - Date.now()) / 60000));
+    if (m < 1) return 'now';
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h${m % 60 ? ` ${m % 60}m` : ''}`;
+    const d = Math.floor(h / 24);
+    return `${d}d${h % 24 ? ` ${h % 24}h` : ''}`;
+  }
+
+  // toast(msg, kind, { action: 'Undo', onAction }) — an action toast stays a little longer and can be tapped
+  function toast(msg, kind, opt) {
     const wrap = document.getElementById('toasts');
     const t = document.createElement('div');
-    t.className = `toast${kind === 'err' ? ' err' : ''}`;
-    t.textContent = msg;
+    t.className = `toast${kind === 'err' ? ' err' : ''}${opt && opt.action ? ' withact' : ''}`;
+    const span = document.createElement('span'); span.textContent = msg; t.appendChild(span);
+    const out = () => { if (!t.isConnected || t.classList.contains('out')) return; t.classList.add('out'); setTimeout(() => t.remove(), 250); };
+    if (opt && opt.action) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = opt.action;
+      b.addEventListener('click', () => { out(); try { opt.onAction(); } catch (e) { /* ignore */ } });
+      t.appendChild(b);
+    }
     wrap.appendChild(t);
     while (wrap.children.length > 3) wrap.firstChild.remove();
-    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 250); }, kind === 'err' ? 3800 : 2200);
+    setTimeout(out, opt && opt.action ? 6500 : kind === 'err' ? 3800 : 2200);
+  }
+
+  // ---------- bottom sheets (actions, pickers, the bell) ----------
+  // sheet({ title, sub, html, onClick(e, sh), onClose }) → { el, body, set(title, html, sub), close() }
+  let curSheet = null;
+  function sheet(o) {
+    if (curSheet) curSheet.close(true);
+    const wrap = document.createElement('div');
+    wrap.className = 'sheetwrap';
+    wrap.innerHTML = `<div class="scrim"></div><div class="sheet${o.cls ? ` ${o.cls}` : ''}" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div><div class="shead"></div><div class="sbody"></div></div>`;
+    const panel = $('.sheet', wrap); const head = $('.shead', wrap); const body = $('.sbody', wrap);
+    let closed = false;
+    const sh = {
+      el: wrap, body, panel,
+      set(title, html, sub, backBtn) {
+        head.innerHTML = title ? `${backBtn ? `<button class="sback" data-act="sback" aria-label="Back">${I.back}</button>` : ''}<div class="stt"><b>${esc(title)}</b>${sub ? `<small>${sub}</small>` : ''}</div>${o.headRight || ''}` : '';
+        head.hidden = !title;
+        panel.setAttribute('aria-label', title || 'Menu');
+        if (html != null) body.innerHTML = html;
+        body.scrollTop = 0;
+      },
+      close(now) {
+        if (closed) return; closed = true;
+        if (curSheet === sh) curSheet = null;
+        if (document.activeElement && wrap.contains(document.activeElement)) document.activeElement.blur();
+        if (now) wrap.remove(); else { wrap.classList.remove('open'); panel.style.transform = ''; setTimeout(() => wrap.remove(), 280); }
+        if (o.onClose) o.onClose();
+      },
+    };
+    sh.set(o.title, o.html || '', o.sub);
+    $('.scrim', wrap).addEventListener('click', () => sh.close());
+    wrap.addEventListener('click', (e) => { if (o.onClick) o.onClick(e, sh); });
+    wrap.addEventListener('change', (e) => { if (o.onChange) o.onChange(e, sh); });
+    // drag the top of the sheet down to close it
+    let y0 = null; let dy = 0;
+    const startDrag = (e) => { if (e.target.closest('button, input, textarea')) return; y0 = e.touches[0].clientY; dy = 0; panel.style.transition = 'none'; };
+    head.addEventListener('touchstart', startDrag, { passive: true });
+    $('.grab', wrap).addEventListener('touchstart', startDrag, { passive: true });
+    wrap.addEventListener('touchmove', (e) => { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); panel.style.transform = `translateY(${dy}px)`; }, { passive: true });
+    wrap.addEventListener('touchend', () => { if (y0 == null) return; y0 = null; panel.style.transition = ''; if (dy > 90) sh.close(); else panel.style.transform = ''; });
+    document.body.appendChild(wrap);
+    curSheet = sh;
+    requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('open')));
+    return sh;
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && curSheet) curSheet.close(); });
+  // one row in a sheet: icon, label, optional small line, optional right side
+  const actRow = (act, icon, label, opt = {}) => `<button type="button" class="act${opt.danger ? ' danger' : ''}${opt.dim ? ' dim' : ''}" data-act="${act}"${opt.data || ''}${opt.disabled ? ' disabled' : ''}>${icon ? `<span class="aico">${icon}</span>` : ''}<span class="alab">${label}${opt.sub ? `<small>${opt.sub}</small>` : ''}</span>${opt.right || ''}</button>`;
+
+  // ---------- what the server can do (GET /hello → features); older servers hide the new buttons ----------
+  const features = () => (data.hello && Array.isArray(data.hello.features) ? data.hello.features : (Array.isArray(store.features) ? store.features : []));
+  const has = (f) => features().includes(f);
+  // every element with data-feat="a b" shows only when the server has a or b
+  function paintFeatures(root) {
+    $$('[data-feat]', root || document).forEach((el) => { el.hidden = !el.dataset.feat.split(' ').some(has); });
+  }
+  function setHello(h) {
+    if (!h) return;
+    data.hello = h;
+    if (h.computer) store.macName = h.computer;
+    store.features = Array.isArray(h.features) ? h.features : [];
+    save();
+    paintConn();
+    paintFeatures();
+    if (view && view.onHello) view.onHello();
   }
 
   async function copyText(text) {
@@ -335,7 +444,7 @@
   window.addEventListener('online', () => { conn.lastDiscover = 0; kickAll(); });
 
   // ---------- shared data: sessions (feeds the list, the session header and the tab badge) ----------
-  const data = { sessions: null, counts: { blue: 0, orange: 0, half: 0 }, at: 0, hello: null, folders: null };
+  const data = { sessions: null, counts: { blue: 0, orange: 0, half: 0 }, at: 0, hello: null, folders: null, notes: null, machines: null, usage: null };
   const subs = new Set();
   let sessionsLoop = null;
   async function fetchSessions() {
@@ -347,13 +456,36 @@
     paintBadges();
     subs.forEach((f) => f());
   }
+  // the bell (the Mac's notifications) and the computers (Mac + Windows twin): polled while the app is open
+  let notesLoop = null; let machinesLoop = null;
+  async function fetchNotes() {
+    if (!has('notifications')) return;
+    const r = await api('GET', '/notifications');
+    data.notes = { unread: r.unread || 0, items: Array.isArray(r.items) ? r.items : [] };
+    paintBell();
+    subs.forEach((f) => f('notes'));
+  }
+  async function fetchMachines() {
+    if (!has('machines')) return;
+    const r = await api('GET', '/machines');
+    data.machines = { machines: Array.isArray(r.machines) ? r.machines : [], everythingOn: r.everythingOn || null, moving: r.moving || null };
+    subs.forEach((f) => f('machines'));
+  }
+  function paintBell() {
+    const n = (data.notes && data.notes.unread) || 0;
+    $$('.bellbtn').forEach((b) => { b.classList.toggle('unread', n > 0); b.setAttribute('aria-label', n ? `Notifications, ${n} unread` : 'Notifications'); });
+  }
   function startGlobal() {
     if (!sessionsLoop) sessionsLoop = loop(fetchSessions, 3000);
-    if (!data.hello) api('GET', '/hello').then((h) => { data.hello = h; if (h && h.computer) { store.macName = h.computer; save(); paintConn(); } }).catch(() => {});
+    if (!notesLoop) notesLoop = loop(fetchNotes, 20000);
+    if (!machinesLoop) machinesLoop = loop(fetchMachines, 15000);
+    if (!data.hello) api('GET', '/hello').then((h) => { setHello(h); if (notesLoop) notesLoop.kick(); if (machinesLoop) machinesLoop.kick(); }).catch(() => {});
   }
   function stopGlobal() {
     if (sessionsLoop) { sessionsLoop.stop(); sessionsLoop = null; }
-    data.sessions = null; data.hello = null; data.folders = null;
+    if (notesLoop) { notesLoop.stop(); notesLoop = null; }
+    if (machinesLoop) { machinesLoop.stop(); machinesLoop = null; }
+    data.sessions = null; data.hello = null; data.folders = null; data.notes = null; data.machines = null; data.usage = null;
   }
   // last list from a previous run, so a cold start (or an offline one) shows something at once
   if (store.token && Array.isArray(store.lastSessions)) { data.sessions = store.lastSessions; data.counts = store.lastCounts || data.counts; }
@@ -369,11 +501,14 @@
   let view = null;
   let navDir = 'fade';
   function show(next) {
+    if (curSheet) curSheet.close(true);
     if (view && view.destroy) view.destroy();
     appEl.innerHTML = '';
     view = next;
     next.el.classList.add(navDir === 'push' ? 'enter-push' : navDir === 'pop' ? 'enter-pop' : 'enter-fade');
+    paintFeatures(next.el);
     appEl.appendChild(next.el);
+    paintBell();
     navDir = 'fade';
     if (next.mounted) next.mounted();
     fitViewport();
@@ -406,14 +541,15 @@
     if ((m = h.match(/^#\/f\/(.+)$/))) return show(FolderView(decodeURIComponent(m[1])));
     if (h === '#/folders') return show(FoldersView());
     if (h === '#/settings') return show(SettingsView());
+    if (h === '#/usage') return show(UsageView());
     return show(SessionsView());
   }
   window.addEventListener('hashchange', route);
 
   function tabbar(active) {
     const n = (data.counts && data.counts.blue) || 0;
-    const t = (id, href, icon, label) => `<a class="tab${active === id ? ' on' : ''}" href="${href}" data-tab="${id}" aria-label="${label}">${icon}<span>${label}</span>${id === 'sessions' ? `<span class="badge"${n ? '' : ' hidden'}>${n}</span>` : ''}</a>`;
-    return `<nav class="botbar tabbar">${t('sessions', '#/', I.sessions, 'Sessions')}${t('folders', '#/folders', I.folder, 'Folders')}${t('settings', '#/settings', I.gear, 'Settings')}</nav>`;
+    const t = (id, href, icon, label) => `<a class="tab${active === id ? ' on' : ''}" href="${href}" data-tab="${id}" aria-label="${label}"${id === 'usage' ? ' data-feat="usage"' : ''}>${icon}<span>${label}</span>${id === 'sessions' ? `<span class="badge"${n ? '' : ' hidden'}>${n}</span>` : ''}</a>`;
+    return `<nav class="botbar tabbar">${t('sessions', '#/', I.sessions, 'Sessions')}${t('folders', '#/folders', I.folder, 'Folders')}${t('usage', '#/usage', I.usage, 'Usage')}${t('settings', '#/settings', I.gear, 'Settings')}</nav>`;
   }
   function screenEl(cls, html) {
     const el = document.createElement('section');
@@ -556,6 +692,142 @@
     return 'sleep';
   }
 
+  // ---------- computers: the Windows twin's state, Wake, "Everything on" ----------
+  const pcMachine = () => (data.machines && data.machines.machines.find((m) => m.id === 'pc')) || null;
+  function machineState(m) {
+    if (!m) return { word: 'Unknown', cls: '' };
+    if (m.asleep) return { word: 'Asleep', cls: 'asleep' };
+    if (!m.online) return { word: 'Offline', cls: 'off' };
+    if (m.full) return { word: 'Full', cls: 'full' };
+    return { word: 'Online', cls: 'on' };
+  }
+  // the line over the sessions list when Windows can't take work ("Windows is asleep — Wake")
+  // a "move everything" under way (or just done): "Moving to Windows · 3 of 7"
+  function movingLine() {
+    const mv = data.machines && data.machines.moving;
+    if (!mv || mv.cancelled) return '';
+    const to = esc(mv.toName || (mv.to === 'pc' ? 'Windows' : 'the Mac'));
+    const n = mv.total ? ` · ${mv.done || 0} of ${mv.total}` : '';
+    if (mv.finished) return `<div class="pcbar moving done"><span class="pdot"></span><span class="grow">Moved everything to ${to}${n}${mv.failed ? `<small>${mv.failed} couldn't move.</small>` : ''}</span></div>`;
+    return `<div class="pcbar moving"><span class="spin sm"></span><span class="grow">Moving everything to ${to}${n}<small>Each session moves once its reply finishes.</small></span><button class="btn-sm" data-act="mvstop">Stop</button></div>`;
+  }
+  async function stopMoving(btn) {
+    if (btn) btn.disabled = true;
+    try { await api('DELETE', '/move-all'); if (data.machines) data.machines.moving = null; toast('Stopped. Sessions not moved yet stay where they are.'); subs.forEach((f) => f('machines')); }
+    catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : e.message, 'err'); if (btn) btn.disabled = false; }
+  }
+  function pcStatusLine() {
+    if (!has('machines')) return '';
+    const pc = pcMachine();
+    const mv = movingLine();
+    if (!pc || (pc.online && !pc.asleep && !pc.full)) return mv;
+    const name = esc(pc.name || 'Windows');
+    if (pc.asleep || !pc.online) {
+      return `${mv}<div class="pcbar ${pc.asleep ? 'asleep' : 'off'}"><span class="pdot"></span><span class="grow">${esc(pc.note || `${pc.name || 'Windows'} is ${pc.asleep ? 'asleep' : 'offline'}.`)}<small>New sessions open on the Mac until it's back.</small></span><button class="btn-sm" data-act="pcwake">Wake</button></div>`;
+    }
+    return `${mv}<div class="pcbar full"><span class="pdot"></span><span class="grow">${esc(pc.note || `${name} is full.`)}<small>No room for more there; new sessions open on the Mac.</small></span></div>`;
+  }
+  async function wakePc(btn) {
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin sm"></span>'; }
+    try {
+      const r = await api('POST', '/machines/pc/wake', {});
+      toast(r && r.already ? 'Windows is already on.' : 'Waking Windows… it takes a minute or two.');
+      setTimeout(() => { if (machinesLoop) machinesLoop.kick(); }, 4000);
+    } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Couldn't wake it: ${e.message}`, 'err'); }
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Wake'; }
+  }
+  // the title bar's "Everything on" move-all switch: Off · Mac · Windows
+  function everythingSeg() {
+    const cur = (data.machines && data.machines.everythingOn) || 'off';
+    const b = (k, l) => `<button type="button" data-every="${k}" class="${cur === k ? 'on' : ''}" aria-pressed="${cur === k}">${l}</button>`;
+    return `<div class="mrow every">${b('off', 'Off')}${b('mac', 'Mac')}${b('pc', 'Windows')}</div>`;
+  }
+  async function setEverything(to, after) {
+    const cur = (data.machines && data.machines.everythingOn) || 'off';
+    if (to === cur) { if (after) after(); return; }
+    if (to !== 'off' && !window.confirm(`Move every session to ${to === 'pc' ? 'Windows' : 'the Mac'} and keep new ones there?`)) { if (after) after(); return; }
+    try {
+      if (to === 'off') await api('DELETE', '/move-all'); else await api('POST', '/move-all', { to });
+      if (data.machines) data.machines.everythingOn = to === 'off' ? null : to;
+      toast(to === 'off' ? 'Everything on is off. Sessions stay where they are.' : `Moving everything to ${to === 'pc' ? 'Windows' : 'the Mac'}…`);
+      setTimeout(() => { if (machinesLoop) machinesLoop.kick(); if (sessionsLoop) sessionsLoop.kick(); }, 250);
+    } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Not changed: ${e.message}`, 'err'); }
+    if (after) after();
+  }
+
+  // ---------- the ⋯ menu over the sessions list ----------
+  function openSessionsMore() {
+    const html = () => `${has('reopen') ? actRow('reopen', I.reopen, 'Reopen closed window', { sub: 'The last window you closed, like ⌘⇧T' }) : ''}
+      ${has('machines') ? `<div class="sgroup"><div class="slabel">Everything on</div>${everythingSeg()}<p class="sfoot">Moves every session to one computer and keeps new ones there.</p></div>` : ''}`;
+    let busy = false;
+    sheet({
+      title: 'Sessions', html: html(),
+      async onClick(e, sh) {
+        const ev = e.target.closest('[data-every]');
+        if (ev) {
+          if (busy) return;
+          busy = true;
+          $$('[data-every]', sh.body).forEach((x) => x.classList.toggle('on', x === ev));
+          await setEverything(ev.dataset.every, () => { busy = false; if (sh.body.isConnected) sh.set('Sessions', html()); });
+          return;
+        }
+        const b = e.target.closest('[data-act="reopen"]');
+        if (!b || busy) return;
+        busy = true; b.classList.add('busy');
+        try {
+          const r = await api('POST', '/reopen', {});
+          sh.close();
+          toast('Window reopened');
+          if (sessionsLoop) sessionsLoop.kick();
+          if (r && r.sessionId) go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
+        } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); busy = false; b.classList.remove('busy'); }
+      },
+    });
+  }
+
+  // ---------- the bell: the Mac's notifications ----------
+  function openBell() {
+    const body = () => {
+      const n = data.notes;
+      if (!n) return '<div class="sempty"><span class="spin"></span></div>';
+      if (!n.items.length) return '<div class="sempty"><b>No notifications</b>FoxyMind\'s alerts from your computers show up here.</div>';
+      return `<div class="notes">${n.items.map((x) => `<button type="button" class="note-row${x.read ? '' : ' unread'}" data-note="${esc(x.id)}"${x.sessionId ? ` data-sid="${esc(x.sessionId)}"` : ''}>
+        <span class="ndot"></span><span class="ntext"><span class="nt">${esc(x.title || 'FoxyMind')}</span>${x.body ? `<span class="nb">${esc(x.body)}</span>` : ''}</span><span class="nage">${esc(age(x.at))}</span></button>`).join('')}</div>`;
+    };
+    const headRight = '<div class="shacts"><button type="button" class="slink" data-act="nread">Read all</button><button type="button" class="slink" data-act="nclear">Clear</button></div>';
+    const onNotes = (what) => { if (what === 'notes' && sh.body.isConnected) sh.set('Notifications', body()); };
+    const sh = sheet({
+      title: 'Notifications', html: body(), cls: 'tall', headRight,
+      async onClick(e) {
+        const a = e.target.closest('[data-act]');
+        if (a && a.dataset.act === 'nread') {
+          try {
+            await api('POST', '/notifications/read', {});
+            if (data.notes) { data.notes.items.forEach((x) => { x.read = true; }); data.notes.unread = 0; }
+            paintBell(); sh.set('Notifications', body());
+          } catch (err) { toast(err.message, 'err'); }
+          return;
+        }
+        if (a && a.dataset.act === 'nclear') {
+          if (!data.notes || !data.notes.items.length) return;
+          try { await api('DELETE', '/notifications'); data.notes = { unread: 0, items: [] }; paintBell(); sh.set('Notifications', body()); } catch (err) { toast(err.message, 'err'); }
+          return;
+        }
+        const r = e.target.closest('.note-row');
+        if (!r) return;
+        const it = data.notes && data.notes.items.find((x) => String(x.id) === r.dataset.note);
+        if (it && !it.read) {
+          it.read = true; data.notes.unread = Math.max(0, (data.notes.unread || 0) - 1); paintBell(); r.classList.remove('unread');
+          api('POST', '/notifications/read', { id: it.id }).catch(() => {});
+        }
+        if (r.dataset.sid) { sh.close(); go(`#/s/${encodeURIComponent(r.dataset.sid)}`, 'push'); }
+      },
+      onClose() { subs.delete(onNotes); },
+    });
+    subs.add(onNotes);
+    if (notesLoop) notesLoop.kick();
+  }
+
   function sessionRow(s) {
     const c = s.color || 'off';
     const when = s.since || s.lastOutputAt;
@@ -573,19 +845,27 @@
   function SessionsView() {
     const el = screenEl('sessions', `
       <header class="topbar">
-        <div class="brandrow">${I.fox}<h1>FoxyMind</h1>${connPill()}</div>
-        <div class="subrow"></div>
+        <div class="brandrow">${I.fox}<h1>FoxyMind</h1>
+          <button class="ibtn bellbtn" data-act="bell" data-feat="notifications" aria-label="Notifications">${I.bell}<i></i></button>
+          <button class="ibtn" data-act="smore" data-feat="reopen machines" aria-label="More">${I.more}</button>
+        </div>
+        <div class="subrow"><span class="counts"></span>${connPill()}</div>
+        <div class="searchrow"><label class="search">${I.search}<input type="search" class="sq" placeholder="Search sessions" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Search sessions"><button type="button" class="sclear" data-act="sclear" aria-label="Clear search" hidden>${I.xsmall}</button></label></div>
         <div class="offline-slot">${offlineBanner()}</div>
       </header>
-      <div class="scroll can-stale"><div class="groups"></div></div>
+      <div class="scroll can-stale"><div class="pcline"></div><div class="groups"></div></div>
       ${tabbar('sessions')}`);
     const groupsEl = $('.groups', el);
-    const subrow = $('.subrow', el);
+    const subrow = $('.subrow .counts', el);
     const scroll = $('.scroll', el);
+    const pcline = $('.pcline', el);
+    const sq = $('.sq', el);
+    let query = '';
     let lastHtml = '';
     let unwatch = () => {};
 
     function render() {
+      pcline.innerHTML = pcStatusLine();
       const c = data.counts || {};
       const waiting = c.blue || 0;
       const working = (c.orange || 0) + (c.half || 0);
@@ -602,8 +882,16 @@
         return;
       }
       const by = { need: [], work: [], idle: [], sleep: [] };
-      for (const s of data.sessions) by[groupOf(s.color)].push(s);
-      const sleepOpen = lsGet('sleepOpen') === '1';
+      const ql = query.trim().toLowerCase();
+      const match = (s) => !ql || `${s.title || ''} ${s.folder || ''}`.toLowerCase().includes(ql);
+      const list0 = data.sessions.filter(match);
+      if (!list0.length) {
+        const html = `<div class="empty"><b>No matches</b>No session title or folder has “${esc(query.trim())}”.</div>`;
+        if (html !== lastHtml) { groupsEl.innerHTML = html; lastHtml = html; }
+        return;
+      }
+      for (const s of list0) by[groupOf(s.color)].push(s);
+      const sleepOpen = lsGet('sleepOpen') === '1' || !!ql;
       let html = '';
       for (const g of GROUPS) {
         const list = by[g.id];
@@ -621,6 +909,18 @@
         groupsEl.innerHTML = html.split('@PH@').join(phase());
       }
     }
+    sq.addEventListener('input', () => { query = sq.value; $('.sclear', el).hidden = !query; render(); });
+    sq.addEventListener('keydown', (e) => { if (e.key === 'Enter') sq.blur(); });
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act]');
+      if (!b) return;
+      const act = b.dataset.act;
+      if (act === 'sclear') { sq.value = ''; query = ''; b.hidden = true; render(); sq.focus(); }
+      else if (act === 'bell') openBell();
+      else if (act === 'smore') openSessionsMore();
+      else if (act === 'pcwake') wakePc(b);
+      else if (act === 'mvstop') stopMoving(b);
+    });
     groupsEl.addEventListener('click', (e) => {
       const f = e.target.closest('[data-act="fold"]');
       if (f) { lsSet('sleepOpen', lsGet('sleepOpen') === '1' ? '' : '1'); render(); return; }
@@ -641,7 +941,8 @@
     const tick = setInterval(render, 15000); // ages ("waiting 4m") move on between polls
     return {
       el,
-      mounted() { unwatch = watchBars(el); subs.add(render); render(); if (sessionsLoop) sessionsLoop.kick(); },
+      mounted() { unwatch = watchBars(el); subs.add(render); render(); if (sessionsLoop) sessionsLoop.kick(); if (machinesLoop) machinesLoop.kick(); },
+      onHello() { lastHtml = ''; render(); },
       destroy() { subs.delete(render); clearInterval(tick); unwatch(); },
     };
   }
@@ -773,9 +1074,9 @@
         <div class="edge"></div>
         <div class="navrow">
           <button class="back" data-act="back" aria-label="Back to sessions">${I.back}</button>
-          <div class="ttl"><div class="t1"></div><div class="t2"></div></div>
-          <span class="statepill"></span>
-          <button class="closewin" data-act="close" aria-label="Close this window" title="Close window">${I.close}</button>
+          <div class="ttl"><div class="t1"></div><div class="t2row"><span class="statepill"></span><div class="t2"></div></div></div>
+          <button class="ibtn svmore" data-act="svmore" data-feat="rename move account" aria-label="More for this session">${I.more}</button>
+          <button class="ibtn closewin" data-act="close" aria-label="Close this window" title="Close window">${I.close}</button>
         </div>
         <div class="seg" role="tablist" hidden><span class="thumb"></span><button role="tab" data-tab="chat" class="on">Chat</button><button role="tab" data-tab="screen">Terminal</button></div>
         <div class="askbar" hidden></div>
@@ -785,12 +1086,13 @@
       <div class="scroll chatscroll can-stale"><div class="chat"></div></div>
       <div class="scroll screenscroll can-stale" hidden><div class="termhelp"><span>The session's terminal, live, as on your computer. You rarely need it: the Chat has everything, and questions show up there as buttons.</span><button class="btn-sm" data-act="wrap"></button></div><pre class="term"></pre><div class="termnote" hidden></div></div>
       <button class="newpill" hidden>${I.down}New messages</button>
+      <div class="jump" hidden><button type="button" data-act="jup" aria-label="My previous prompt">${I.up}</button><button type="button" data-act="jdn" aria-label="My next prompt">${I.dn}</button></div>
       <footer class="botbar composer">
         <div class="qcard" hidden></div>
         <div class="keys" hidden>${KEYS.map(([label, key, cls]) => `<button class="key ${cls || ''}" data-key="${key}" aria-label="${key}">${esc(label)}</button>`).join('')}</div>
         <div class="hint"></div>
         <div class="mpanel" hidden></div>
-        <div class="mbar" hidden><button class="mchip" data-act="mchip" aria-expanded="false" aria-label="Model and effort"><span class="ml"></span>${I.chev}</button></div>
+        <div class="mbar" hidden><button class="mchip" data-act="mchip" aria-expanded="false" aria-label="Model and effort"><span class="ml"></span>${I.chev}</button><button class="enh" data-act="enhance" hidden aria-label="Enhance my prompt">${I.sparkle}<span>Enhance</span></button></div>
         <div class="micline" hidden><span class="mdot"></span><span class="mtext">Listening…</span><button class="mcancel" data-act="mcancel" aria-label="Cancel recording">${I.close}</button></div>
         <div class="photos" hidden></div>
         <div class="crow-in">
@@ -822,6 +1124,8 @@
     const mchip = $('.mchip', el);
     const mpanel = $('.mpanel', el);
     let mOpen = false; let mBusy = false; let mPicked = null; let mSig = '';
+    const enhBtn = $('.enh', el);
+    let enhBusy = false;
 
     // ----- model and effort: a chip over the message box, its picker opens above it -----
     // (what was just picked shows at once; the sessions list says the same a moment later)
@@ -832,7 +1136,10 @@
     function paintModel() {
       const show = !!(meta && meta.claude && meta.color !== 'off');
       if (!show) mOpen = false;
-      mbar.hidden = !show;
+      mchip.hidden = !show;
+      const enhOn = has('enhance') && (enhBusy || !!box.value.trim()) && !(meta && meta.color === 'off');
+      enhBtn.hidden = !enhOn;
+      mbar.hidden = !show && !enhOn;
       mpanel.hidden = !mOpen;
       const now = modelNow();
       $('.ml', mchip).textContent = modelLabel(now.model, now.effort) || 'Model';
@@ -863,6 +1170,27 @@
       paintModel();
     });
 
+    // ----- ✨ Enhance (the Mac's Enhance: rewrites the prompt in the box through Claude Code on the subscription) -----
+    enhBtn.addEventListener('click', async () => {
+      const before = box.value;
+      if (enhBusy || !before.trim()) return;
+      enhBusy = true; enhBtn.classList.add('busy'); enhBtn.disabled = true;
+      $('span', enhBtn).textContent = 'Enhancing…';
+      box.readOnly = true;
+      try {
+        const r = await api('POST', '/enhance', { text: before }, { timeout: 90000 });
+        const t = String((r && r.text) || '').trim();
+        if (!t) throw new Error('Nothing came back');
+        if (box.value === before) {
+          box.value = t; lsSet(draftKey, t); grow();
+          toast('Prompt enhanced', '', { action: 'Undo', onAction: () => { box.value = before; lsSet(draftKey, before); grow(); } });
+        }
+      } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't enhance: ${err.message}`, 'err'); }
+      enhBusy = false; box.readOnly = false; enhBtn.classList.remove('busy'); enhBtn.disabled = false;
+      $('span', enhBtn).textContent = 'Enhance';
+      paintModel();
+    });
+
     // ----- header / state -----
     function paintHeader() {
       const s = meta;
@@ -870,7 +1198,7 @@
       const cls = `topbar${c ? ` c-${c}` : ''}`;
       if (top.className !== cls) { top.className = cls; top.setAttribute('style', phase()); } // glow in step with the dots
       $('.t1', el).textContent = s ? (s.title || 'Untitled') : (Date.now() - openedAt < 20000 ? 'Starting…' : 'Session');
-      $('.t2', el).innerHTML = s ? `<span style="overflow:hidden;text-overflow:ellipsis">${esc(s.folder || '')}</span>${machineTag(s)}` : '';
+      $('.t2', el).innerHTML = s ? `<span class="tf">${esc(s.folder || '')}</span>${machineTag(s)}${s.account && s.account.name ? `<span class="tacct">${esc(s.account.name)}</span>` : ''}` : '';
       const pill = $('.statepill', el);
       if (s) {
         const when = s.since || s.lastOutputAt;
@@ -926,6 +1254,7 @@
       $$('button[data-tab]', seg).forEach((b) => { b.classList.toggle('on', b.dataset.tab === t); b.setAttribute('aria-selected', b.dataset.tab === t); });
       chatScroll.hidden = t !== 'chat';
       screenScroll.hidden = t !== 'screen';
+      if (t !== 'chat') jumpEl.hidden = true;
       keysEl.hidden = t !== 'screen';
       newPill.hidden = true;
       if (chatLoop) { chatLoop.stop(); chatLoop = null; }
@@ -939,7 +1268,31 @@
 
     // ----- chat -----
     const nearBottom = (sc) => sc.scrollHeight - sc.scrollTop - sc.clientHeight < 60;
-    chatScroll.addEventListener('scroll', () => { atBottom = nearBottom(chatScroll); if (atBottom) newPill.hidden = true; }, { passive: true });
+    chatScroll.addEventListener('scroll', () => { atBottom = nearBottom(chatScroll); if (atBottom) newPill.hidden = true; paintJump(); }, { passive: true });
+
+    // ----- ↑ ↓ jump between my own prompts (like the Mac's scroll-jump), shown while scrolled up -----
+    const jumpEl = $('.jump', el);
+    const topPad = () => parseFloat(getComputedStyle(chatScroll).paddingTop) || 0;
+    function paintJump() {
+      const show = tab === 'chat' && !atBottom && !!chatEl.querySelector('.msg.user');
+      if (jumpEl.hidden === show) jumpEl.hidden = !show;
+    }
+    jumpEl.addEventListener('mousedown', (e) => e.preventDefault());
+    jumpEl.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-act]');
+      if (!b) return;
+      const tp = topPad();
+      const viewTop = chatScroll.scrollTop + tp;
+      const users = $$('.msg.user', chatEl).map((n) => n.closest('.it') || n);
+      const pos = (n) => n.offsetTop - tp - 10;
+      let target = null;
+      if (b.dataset.act === 'jup') { for (const n of users) if (n.offsetTop < viewTop - 14) target = n; }
+      else { for (const n of users) if (n.offsetTop > viewTop + 14) { target = n; break; } }
+      if (target) chatScroll.scrollTo({ top: Math.max(0, pos(target)), behavior: 'smooth' });
+      else if (b.dataset.act === 'jdn') chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+      else chatScroll.scrollTo({ top: 0, behavior: 'smooth' });
+      if (target) { const m = target.querySelector('.msg.user'); if (m) { m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 900); } }
+    });
     screenScroll.addEventListener('scroll', () => { screenAtBottom = nearBottom(screenScroll); }, { passive: true });
     newPill.addEventListener('click', () => { chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' }); newPill.hidden = true; });
 
@@ -1011,6 +1364,7 @@
         if (anchor && anchor.isConnected) chatScroll.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
         if (grew && lastOldKey) newPill.hidden = false;
       }
+      paintJump();
     }
     chatEl.addEventListener('click', async (e) => {
       const more = e.target.closest('[data-act="more"]');
@@ -1095,6 +1449,7 @@
       const h = Math.min(box.scrollHeight + 1, Math.round(LINE * 6 + 20));
       box.style.height = `${Math.max(42, h)}px`;
       sendBtn.disabled = !box.value.trim() && !shots.length;
+      paintModel();
     }
 
     // ----- photos: picked on the phone, made smaller (2048 px, JPEG), sent to the session's computer at once; the
@@ -1281,9 +1636,10 @@
 
     // ----- close the window (like its ✕ on the computer: stops it and frees its memory) -----
     let closing = false;
-    el.addEventListener('click', async (e) => {
-      const b = e.target.closest('[data-act="close"]');
-      if (!b || closing) return;
+    el.addEventListener('click', (e) => { const b = e.target.closest('[data-act="close"]'); if (b) closeWindow(b); });
+    async function closeWindow(b0) {
+      const b = b0 || $('[data-act="close"]', el);
+      if (closing) return;
       const busy = meta && (meta.color === 'orange' || meta.color === 'half');
       const where = meta && meta.machineName ? ` on ${meta.machineName}` : '';
       if (!window.confirm(`Close this window${where}?${busy ? ' It is still working; closing stops it.' : ''} Its memory is freed. You can resume the chat later from its folder.`)) return;
@@ -1296,10 +1652,140 @@
         if (sessionsLoop) sessionsLoop.kick();
         back('#/');
       } catch (er) {
-        toast(`Couldn't close it: ${er.message}`, 'error');
+        toast(`Couldn't close it: ${er.message}`, 'err');
         closing = false; b.disabled = false; b.classList.remove('busy');
       }
-    });
+    }
+
+    // ----- ⋯ : rename, move, account, restart, duplicate, keep awake, close (the Mac's pane menu) -----
+    const sid = encodeURIComponent(id);
+    const v6 = () => has('rename'); // (restart / duplicate / keep-awake came with the same server update)
+    function moreHtml() {
+      const s = meta || {};
+      const other = s.canMove === 'pc' ? 'Windows' : 'the Mac';
+      const awake = typeof s.keepAwake === 'boolean';
+      let h = '';
+      if (has('rename')) h += actRow('rename', I.pencil, 'Rename');
+      if (has('move') && s.canMove) h += actRow('move', I.swap, `Move to ${other}`, { sub: 'Same chat, on the other computer' });
+      if (has('account') && s.provider === 'claude') h += actRow('account', I.person, 'Switch account', { sub: s.account && s.account.name ? `Now on ${esc(s.account.name)}` : '', right: I.chev });
+      if (v6()) {
+        h += actRow('restart', I.restart, 'Restart', { sub: 'Same conversation, fresh process' });
+        h += actRow('duplicate', I.copy2, 'Duplicate', { sub: 'A second window on this chat' });
+      }
+      if (awake) h += `<label class="act"><span class="aico">${I.moon}</span><span class="alab">Keep awake<small>Never put to sleep when idle</small></span><input type="checkbox" class="switch" data-act="awake"${s.keepAwake ? ' checked' : ''}></label>`;
+      h += actRow('sclose', I.xbig, 'Close window', { danger: true, sub: 'Frees its memory; resume later from its folder' });
+      return h;
+    }
+    const moreSub = () => (meta ? `${esc(meta.folder || '')} · ${esc(meta.machineName || (meta.machine === 'pc' ? 'Windows' : 'Mac'))}${meta.account && meta.account.name ? ` · ${esc(meta.account.name)}` : ''}` : '');
+    function accountRows(u) {
+      const p = u && (u.providers || []).find((x) => x.provider === 'claude');
+      if (!p || !p.accounts || !p.accounts.length) return '<div class="sempty">No Claude accounts found.</div>';
+      const cur = meta && meta.account ? meta.account.id : null;
+      const isCur = (a) => !!cur && [a.id].concat(a.alsoIds || []).includes(cur);
+      return p.accounts.map((a) => {
+        const w5 = (a.windows || []).find((w) => w.kind === 'session');
+        const wk = (a.windows || []).find((w) => w.kind === 'week');
+        const left = (w) => (w && w.usedPercent != null ? `${Math.max(0, Math.round(100 - w.usedPercent))}%` : '–');
+        const spent = !!a.spent || (w5 && w5.usedPercent >= 100) || (wk && wk.usedPercent >= 100);
+        const sub = a.skipped ? 'Skipped' : (w5 || wk) ? `5-hour ${left(w5)} left · Week ${left(wk)} left${spent ? ' · used up' : ''}` : (spent ? 'Used up' : 'No numbers yet');
+        return `<button type="button" class="act acct${a.skipped ? ' dim' : ''}${spent && !a.skipped ? ' spent' : ''}" data-acct="${esc(a.id)}"${a.skipped ? ' disabled' : ''}>
+          <span class="alab">${esc(a.name)}${a.plan ? ` <span class="plan">${esc(a.plan)}</span>` : ''}<small>${sub}</small></span>${isCur(a) ? `<span class="tick">${I.check}</span>` : ''}</button>`;
+      }).join('');
+    }
+    function openMore() {
+      let busy = false;
+      const main = (sh) => sh.set(meta ? meta.title || 'Session' : 'Session', moreHtml(), moreSub());
+      const sh = sheet({
+        title: meta ? meta.title || 'Session' : 'Session', sub: moreSub(), html: moreHtml(),
+        async onClick(e) {
+          if (e.target.closest('[data-act="sback"]')) { main(sh); return; }
+          const b = e.target.closest('button[data-act], button[data-acct]');
+          if (!b || busy) return;
+          const act = b.dataset.act;
+          const run = async (fn) => { busy = true; b.classList.add('busy'); try { await fn(); } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); } busy = false; b.classList.remove('busy'); };
+          if (act === 'rename') {
+            sh.set('Rename', `<form class="rename"><input class="rin" type="text" maxlength="120" value="${esc(meta ? meta.title || '' : '')}" aria-label="New name" enterkeyhint="done" autocomplete="off"><button type="submit" class="btn primary">Save</button></form>`, '', true);
+            const f = $('form', sh.body); const inp = $('.rin', sh.body);
+            setTimeout(() => { inp.focus(); inp.select(); }, 60);
+            f.addEventListener('submit', async (ev) => {
+              ev.preventDefault();
+              const title = inp.value.trim();
+              if (!title) { inp.focus(); return; }
+              await run(async () => {
+                await api('POST', `/sessions/${sid}/rename`, { title });
+                if (meta) meta.title = title;
+                paintHeader(); sh.close(); toast('Renamed');
+                if (sessionsLoop) sessionsLoop.kick();
+              });
+            });
+            return;
+          }
+          if (act === 'account') {
+            sh.set('Switch account', '<div class="sempty"><span class="spin"></span></div>', 'Claude accounts and what they have left', true);
+            try {
+              const u = await api('GET', '/usage'); data.usage = u;
+              if (sh.body.isConnected) sh.set('Switch account', accountRows(u), 'Claude accounts and what they have left', true);
+            } catch (err) { if (sh.body.isConnected) sh.set('Switch account', `<div class="sempty">${esc(err.message)}</div>`, '', true); }
+            return;
+          }
+          if (b.dataset.acct) {
+            const picked = ((data.usage && data.usage.providers) || []).flatMap((p) => p.accounts || []).find((x) => x.id === b.dataset.acct);
+            if (meta && meta.account && picked && [picked.id].concat(picked.alsoIds || []).includes(meta.account.id)) { sh.close(); return; }
+            await run(async () => {
+              await api('POST', `/sessions/${sid}/account`, { accountId: b.dataset.acct }, { timeout: 60000 });
+              const a = ((data.usage && data.usage.providers) || []).flatMap((p) => p.accounts || []).find((x) => x.id === b.dataset.acct);
+              if (meta && a) meta.account = { id: a.id, name: a.name };
+              paintHeader(); sh.close(); toast(`Switching to ${a ? a.name : 'that account'}… it continues where it was.`);
+              setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); }, 1200);
+            });
+            return;
+          }
+          if (act === 'move') {
+            const to = meta && meta.canMove;
+            if (!to) return;
+            await run(async () => {
+              await api('POST', `/sessions/${sid}/move`, { to }, { timeout: 60000 });
+              sh.close(); toast(`Moving to ${to === 'pc' ? 'Windows' : 'the Mac'}… find it in the list in a moment.`);
+              if (sessionsLoop) sessionsLoop.kick();
+              back('#/');
+            });
+            return;
+          }
+          if (act === 'restart') {
+            const working = meta && (meta.color === 'orange' || meta.color === 'half');
+            if (working && !window.confirm('It is still working. Restart anyway? The turn in progress stops.')) return;
+            await run(async () => {
+              await api('POST', `/sessions/${sid}/restart`, {}, { timeout: 60000 });
+              sh.close(); toast('Restarting… same conversation.');
+              setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); if (chatLoop) chatLoop.kick(); }, 1500);
+            });
+            return;
+          }
+          if (act === 'duplicate') {
+            await run(async () => {
+              const r = await api('POST', `/sessions/${sid}/duplicate`, {}, { timeout: 60000 });
+              sh.close(); toast('Duplicated');
+              if (sessionsLoop) sessionsLoop.kick();
+              if (r && r.sessionId) go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
+            });
+            return;
+          }
+          if (act === 'sclose') { sh.close(); closeWindow(); }
+        },
+        async onChange(e) {
+          const sw = e.target.closest('[data-act="awake"]');
+          if (!sw) return;
+          sw.disabled = true;
+          try {
+            await api('POST', `/sessions/${sid}/keep-awake`, { on: sw.checked });
+            if (meta) meta.keepAwake = sw.checked;
+            toast(sw.checked ? 'Kept awake' : 'Sleeps when idle again');
+          } catch (err) { sw.checked = !sw.checked; toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); }
+          sw.disabled = false;
+        },
+      });
+    }
+    el.addEventListener('click', (e) => { if (e.target.closest('[data-act="svmore"]')) openMore(); });
 
     return {
       el,
@@ -1379,6 +1865,11 @@
       <div class="scroll can-stale">
         <div class="fhead"><button class="btn primary" data-act="new">${I.plus}New Claude chat</button></div>
         <div class="fpick">${pickerHtml(NEW_CHAT.model, NEW_CHAT.effort)}</div>
+        <div class="kinds" data-feat="newkinds"><div class="mlab">Or start</div><div class="krow">
+          <button type="button" class="kbtn" data-kind="codex">${I.k_codex}<span>Codex</span></button>
+          <button type="button" class="kbtn" data-kind="grok">${I.k_grok}<span>Grok</span></button>
+          <button type="button" class="kbtn" data-kind="shell">${I.k_term}<span>Terminal</span></button>
+        </div></div>
         <p class="fpath">${f0 && f0.path ? esc(f0.path) : ''}</p>
         <div class="chats"></div>
       </div>
@@ -1432,6 +1923,21 @@
         $('.fpick', el).innerHTML = pickerHtml(start.model, start.effort);
         return;
       }
+      const kb = e.target.closest('.kbtn');
+      if (kb) {
+        busy = true;
+        const label = $('span', kb).textContent;
+        kb.classList.add('busy'); $('span', kb).textContent = 'Starting…';
+        try {
+          const r = await api('POST', `/folders/${encodeURIComponent(fid)}/new`, { provider: kb.dataset.kind }, { timeout: 60000 });
+          go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
+        } catch (err) {
+          toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't start: ${err.message}`, 'err');
+          kb.classList.remove('busy'); $('span', kb).textContent = label;
+        }
+        busy = false;
+        return;
+      }
       if (e.target.closest('[data-act="new"]')) {
         busy = true;
         newBtn.innerHTML = '<span class="spin"></span>Starting…';
@@ -1464,6 +1970,115 @@
       el,
       mounted() { unwatch = watchBars(el); render(null); load(); },
       destroy() { unwatch(); },
+    };
+  }
+
+  // ======================================================================================
+  // Usage: the Mac's Usage panel, one hairline row per account
+  // ======================================================================================
+  function ubar(w, short) {
+    const used = w && w.usedPercent != null ? Math.max(0, Math.min(100, Number(w.usedPercent))) : null;
+    const left = used == null ? null : Math.round(100 - used);
+    const lvl = left == null ? '' : left <= 0 ? 'zero' : left < 10 ? 'low' : left < 25 ? 'mid' : '';
+    const reset = w && w.resetsAt ? `resets ${until(w.resetsAt)}` : '';
+    const val = left == null ? 'Not known' : `${left}% left${reset ? ` · ${reset}` : ''}`;
+    return `<div class="ubar ${lvl}"><span class="ul">${esc(short || (w && w.label) || '')}</span><span class="track"><i style="transform:scaleX(${left == null ? 0 : left / 100})"></i></span><span class="uv">${esc(val)}</span></div>`;
+  }
+  function UsageView() {
+    const el = screenEl('usage', `
+      <header class="topbar">
+        <div class="brandrow"><h1>Usage</h1><button class="ibtn" data-act="urefresh" aria-label="Refresh usage">${I.refresh}</button></div>
+        <div class="subrow"><span class="uat"></span>${connPill()}</div>
+        <div class="offline-slot">${offlineBanner()}</div>
+      </header>
+      <div class="scroll can-stale"><div class="body"></div></div>
+      ${tabbar('usage')}`);
+    const body = $('.body', el);
+    const scroll = $('.scroll', el);
+    const atEl = $('.uat', el);
+    const open = new Set();
+    let unwatch = () => {}; let ul = null; let refreshing = false; let err = null;
+
+    function row(a, p) {
+      const ws = a.windows || [];
+      const w5 = ws.find((w) => w.kind === 'session');
+      const wk = ws.find((w) => w.kind === 'week');
+      const spent = !!a.spent || ws.some((w) => w.usedPercent >= 100);
+      const isOpen = open.has(a.id);
+      const tags = [];
+      if (a.skipped) tags.push('<span class="utag skip">Skipped</span>');
+      else {
+        if (a.inUse) tags.push(`<span class="utag use">in use · ${a.inUse}</span>`);
+        if (a.usedFirst) tags.push('<span class="utag first">used first</span>');
+        else if (a.next && !a.inUse) tags.push('<span class="utag nxt">next</span>');
+        if (spent) tags.push('<span class="utag spent">used up</span>');
+      }
+      if (a.error) tags.push('<span class="utag errt">error</span>');
+      const bars = isOpen ? ws.map((w) => ubar(w, w.label)).join('') : `${w5 ? ubar(w5, '5-hour') : ''}${wk ? ubar(wk, 'Week') : ''}`;
+      const more = isOpen ? `<div class="umore">
+          ${a.error ? `<p class="uerr">${esc(a.error)}</p>` : ''}
+          <div class="ufoot"><span>${a.updatedAt ? `Updated ${esc(age(a.updatedAt))} ago` : ''}${a.inUse ? ` · ${a.inUse} open session${a.inUse === 1 ? '' : 's'}` : ''}</span>
+          <button class="btn-sm${a.skipped ? ' on' : ''}" data-skip="${esc(a.id)}" data-to="${a.skipped ? '0' : '1'}" data-name="${esc(a.name)}">${a.skipped ? 'Use again' : 'Skip'}</button></div></div>` : '';
+      return `<div class="urow${a.skipped ? ' skipped' : ''}${isOpen ? ' open' : ''}" data-acc="${esc(a.id)}">
+        <button type="button" class="uhead" data-act="utoggle" aria-expanded="${isOpen}"><span class="uname">${esc(a.name)}${a.plan ? `<span class="plan">${esc(a.plan)}</span>` : ''}</span><span class="utags">${tags.join('')}</span>${I.chev}</button>
+        ${bars ? `<div class="ubars">${bars}</div>` : ''}${more}</div>`;
+    }
+    function render() {
+      const u = data.usage;
+      atEl.textContent = refreshing ? 'Refreshing…' : u && u.at ? `Updated ${Date.now() - u.at < 60000 ? 'just now' : `${age(u.at)} ago`}` : '';
+      if (!u) {
+        body.innerHTML = err ? `<div class="empty"><b>Couldn't load usage</b>${esc(err)}<button class="btn secondary" data-act="urefresh">Try again</button></div>` : '<div class="glabel">&nbsp;</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+        return;
+      }
+      const ps = (u.providers || []).filter((p) => p.accounts && p.accounts.length);
+      if (!ps.length) { body.innerHTML = '<div class="empty"><b>No accounts</b>Sign in to Claude, Codex or Grok in FoxyMind on your Mac.</div>'; return; }
+      body.innerHTML = ps.map((p) => `<div class="glabel">${esc(p.name || p.provider)} <span class="n">· ${p.accounts.length}</span></div><div class="list ulist">${p.accounts.map((a) => row(a, p)).join('')}</div>`).join('')
+        + '<p class="gfoot">Tap an account for every limit and to skip it. Skipped accounts are never used; their sessions move to others.</p>';
+    }
+    async function load() {
+      try { data.usage = await api('GET', '/usage'); err = null; } catch (e) { err = e.message; }
+      render();
+    }
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true; render();
+      const b = $('[data-act="urefresh"]', el); if (b) b.classList.add('spinning');
+      try { data.usage = await api('POST', '/usage/refresh', {}, { timeout: 30000 }); err = null; } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Couldn't refresh: ${e.message}`, 'err'); }
+      refreshing = false; if (b) b.classList.remove('spinning');
+      render();
+    }
+    el.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-act="urefresh"]')) { refresh(); return; }
+      const sk = e.target.closest('[data-skip]');
+      if (sk) {
+        const skip = sk.dataset.to === '1';
+        if (skip && !window.confirm(`Skip ${sk.dataset.name}? FoxyMind stops using it and moves its sessions to other accounts.`)) return;
+        sk.disabled = true;
+        try {
+          await api('POST', `/accounts/${encodeURIComponent(sk.dataset.skip)}/skip`, { skip });
+          const a = ((data.usage && data.usage.providers) || []).flatMap((p) => p.accounts || []).find((x) => x.id === sk.dataset.skip);
+          if (a) a.skipped = skip;
+          toast(skip ? `${sk.dataset.name} is skipped` : `${sk.dataset.name} is used again`);
+          render();
+          setTimeout(load, 1500);
+        } catch (er) { sk.disabled = false; toast(er.offline ? 'Can\'t reach your Mac' : er.message, 'err'); }
+        return;
+      }
+      const h = e.target.closest('[data-act="utoggle"]');
+      if (h) { const id = h.closest('.urow').dataset.acc; if (open.has(id)) open.delete(id); else open.add(id); render(); }
+    });
+    let pullStart = null;
+    scroll.addEventListener('touchstart', (e) => { pullStart = scroll.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
+    scroll.addEventListener('touchend', (e) => {
+      if (pullStart == null) return;
+      const dy = (e.changedTouches[0] ? e.changedTouches[0].clientY : 0) - pullStart;
+      pullStart = null;
+      if (dy > 90) refresh();
+    }, { passive: true });
+    return {
+      el,
+      mounted() { unwatch = watchBars(el); render(); ul = loop(load, 60000); },
+      destroy() { if (ul) ul.stop(); unwatch(); },
     };
   }
 
@@ -1528,7 +2143,8 @@
       const state = conn.state === 'online' ? 'Online' : conn.state === 'offline' ? 'Offline' : conn.state === 'reconnecting' ? 'Reconnecting…' : 'Checking…';
       // the Mac's row shows this phone's link to it; other computers show what the Mac says about them
       const isMac = (m) => m.id === 'mac' || m.name === (store.macName || 'Mac');
-      const rows = machines.length ? machines : [{ id: 'mac', name: store.macName || 'Mac' }];
+      // (with the Computers section, this one only shows the phone's own link to the Mac)
+      const rows = machines.length && !has('machines') ? machines : [{ id: 'mac', name: store.macName || 'Mac' }];
       return `<div class="glabel">Connection</div><div class="list">
         ${rows.map((m) => {
           const on = isMac(m) ? conn.state === 'online' : !!m.online;
@@ -1540,8 +2156,29 @@
         ${h && h.build ? `<div class="lrow"><span class="grow">FoxyMind build</span><span class="val">${esc(h.build)}</span></div>` : ''}
       </div>`;
     }
+    function computersSection() {
+      if (!has('machines')) return '';
+      const ms = data.machines ? data.machines.machines : null;
+      if (!ms) return '<div class="glabel">Computers</div><div class="list"><div class="skel"></div><div class="skel"></div></div>';
+      const rows = ms.map((m) => {
+        const st = machineState(m);
+        const bits = [st.word];
+        if (m.online && !m.asleep) {
+          if (m.cpu != null) bits.push(`CPU ${Math.round(m.cpu)}%`);
+          if (m.freeGB != null) bits.push(`${Number(m.freeGB).toFixed(1)} GB free`);
+        }
+        if (m.note && !(m.online && !m.asleep)) bits.splice(0, 1, m.note.replace(/\.$/, ''));
+        const n = m.sessions != null ? `${m.sessions} session${m.sessions === 1 ? '' : 's'}` : '';
+        const wake = m.id === 'pc' && (m.asleep || !m.online) ? '<button class="btn-sm" data-act="pcwake">Wake</button>' : '';
+        return `<div class="lrow"><span class="mdot ${st.cls}"></span><span class="grow">${esc(m.name || (m.id === 'pc' ? 'Windows' : 'Mac'))}<small>${esc(bits.join(' · '))}</small></span>${wake || `<span class="val">${esc(n)}</span>`}</div>`;
+      }).join('');
+      return `<div class="glabel">Computers</div>${movingLine()}<div class="list">${rows}
+
+        <div class="lrow everyrow"><span class="grow">Everything on</span>${everythingSeg()}</div></div>
+        <p class="gfoot">Everything on moves every session to one computer and keeps new ones there.</p>`;
+    }
     function render() {
-      body.innerHTML = `${notifSection()}${connSection()}
+      body.innerHTML = `${notifSection()}${computersSection()}${connSection()}
         <div class="glabel">This phone</div>
         <div class="list"><button class="lrow danger" style="width:100%" data-act="unpair">Unpair this phone</button></div>
         <p class="gfoot">Unpairing removes this phone from FoxyMind. You'll need a new pair link to use it again.</p>
@@ -1549,8 +2186,8 @@
     }
     async function refresh() {
       try {
-        data.hello = await api('GET', '/hello');
-        if (data.hello && data.hello.computer) { store.macName = data.hello.computer; save(); }
+        setHello(await api('GET', '/hello'));
+        if (machinesLoop) machinesLoop.kick();
       } catch (e) { /* offline: show what we have */ }
       if (pushSupported()) {
         try { const reg = await navigator.serviceWorker.getRegistration(); localSub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null; } catch (e) { localSub = null; }
@@ -1586,10 +2223,20 @@
       busy = ''; render();
     }
 
+    let everyBusy = false;
     body.addEventListener('click', async (e) => {
+      const ev = e.target.closest('[data-every]');
+      if (ev && !everyBusy) {
+        everyBusy = true; busy = 'every';
+        $$('[data-every]', body).forEach((x) => x.classList.toggle('on', x === ev));
+        await setEverything(ev.dataset.every, () => { everyBusy = false; busy = ''; render(); });
+        return;
+      }
       const b = e.target.closest('[data-act]');
       if (!b) return;
       const act = b.dataset.act;
+      if (act === 'pcwake') { wakePc(b); return; }
+      if (act === 'mvstop') { stopMoving(b); return; }
       if (act === 'push-on') { pushOn(); return; }
       if (act === 'push-test') {
         busy = 'test'; render();
@@ -1637,10 +2284,13 @@
     });
 
     const tick = setInterval(() => { if (!busy && !body.contains(document.activeElement)) render(); }, 10000);
+    const onData = (what) => { if (what === 'machines' && !busy) render(); };
     return {
       el,
-      mounted() { unwatch = watchBars(el); render(); refresh(); },
-      destroy() { clearInterval(tick); unwatch(); },
+      mounted() { unwatch = watchBars(el); render(); refresh(); subs.add(onData); },
+      onHello() { if (!busy) render(); },
+      destroy() { clearInterval(tick); unwatch(); subs.delete(onData); },
+
     };
   }
 
