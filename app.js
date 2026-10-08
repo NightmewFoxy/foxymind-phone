@@ -1670,7 +1670,7 @@
       if (has('account') && s.provider === 'claude') h += actRow('account', I.person, 'Switch account', { sub: s.account && s.account.name ? `Now on ${esc(s.account.name)}` : '', right: I.chev });
       if (v6()) {
         h += actRow('restart', I.restart, 'Restart', { sub: 'Same conversation, fresh process' });
-        h += actRow('duplicate', I.copy2, 'Duplicate', { sub: 'A second window on this chat' });
+        h += actRow('duplicate', I.copy2, 'Duplicate', { sub: 'A new, empty session of the same kind here' });
       }
       if (awake) h += `<label class="act"><span class="aico">${I.moon}</span><span class="alab">Keep awake<small>Never put to sleep when idle</small></span><input type="checkbox" class="switch" data-act="awake"${s.keepAwake ? ' checked' : ''}></label>`;
       h += actRow('sclose', I.xbig, 'Close window', { danger: true, sub: 'Frees its memory; resume later from its folder' });
