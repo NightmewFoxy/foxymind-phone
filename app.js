@@ -1,9 +1,11 @@
 // FoxyMind Phone — see and continue FoxyMind sessions from the iPhone.
 // Plain JS, no build step. Talks to <base>/phone/api (see phone/API.md); finds <base> on ntfy.sh.
+// Two ways in (v8): the Mac's address and Windows' are both on ntfy; the app uses the Mac when it answers (it shows
+// both computers' sessions) and Windows when it doesn't (Windows' own sessions), and goes back by itself.
 (() => {
   'use strict';
 
-  const APP_VERSION = '7.0';
+  const APP_VERSION = '8.0';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -237,7 +239,7 @@
   function setHello(h) {
     if (!h) return;
     data.hello = h;
-    if (h.computer) store.macName = h.computer;
+    if (h.computer) { if (routeNow() === 'mac') store.macName = h.computer; else store.pcName = h.computer; }
     store.features = Array.isArray(h.features) ? h.features : [];
     save();
     paintConn();
@@ -304,14 +306,15 @@
     setConn('online');
   }
   function connPill() {
-    const name = esc(store.macName || 'Mac');
+    const name = esc(routeName());
     const label = conn.state === 'online' ? `${name} online` : conn.state === 'reconnecting' ? 'Reconnecting…' : conn.state === 'offline' ? 'Offline' : 'Connecting…';
     return `<span class="connpill ${conn.state}" role="status"><i></i>${label}</span>`;
   }
   function offlineBanner() {
-    if (conn.state !== 'offline') return '';
+    // (in through Windows: its own sessions only, until the Mac answers again)
+    if (conn.state !== 'offline') return routeNow() === 'pc' && conn.state === 'online' ? `<div class="offbanner via"><div class="grow"><b>${esc(store.macName || 'Mac')} can't be reached</b>Showing the sessions on ${esc(routeName())}. It switches back by itself.</div><button class="btn-sm" data-act="retry">Retry</button></div>` : '';
     const seen = store.lastSeen ? ` Last seen ${age(store.lastSeen)} ago.` : '';
-    return `<div class="offbanner"><div class="grow"><b>Mac is offline or asleep</b>Showing the last update.${seen}</div><button class="btn-sm" data-act="retry">Retry</button></div>`;
+    return `<div class="offbanner"><div class="grow"><b>${baseOf('pc') ? 'Mac and Windows are offline or asleep' : 'Mac is offline or asleep'}</b>Showing the last update.${seen}</div><button class="btn-sm" data-act="retry">Retry</button></div>`;
   }
   function paintConn() {
     $$('.connpill').forEach((el) => { el.outerHTML = connPill(); });
@@ -321,14 +324,20 @@
   document.addEventListener('click', (e) => {
     const b = e.target.closest('[data-act="retry"]');
     if (!b) return;
-    setConn('reconnecting');
-    conn.lastDiscover = 0;
+    if (conn.state !== 'online') setConn('reconnecting');
+    conn.lastDiscover = 0; conn.pickedAt = 0;
+    if (routeNow() === 'pc') pickRoute().catch(() => {}); // (try the Mac again now)
     kickAll();
   });
 
-  // ---------- finding the Mac + API ----------
+  // ---------- finding the computers + API ----------
+  // store.bases = { mac, pc }: each computer's current tunnel address; store.route = the one in use.
   const ntfyBase = () => store.ntfy || 'https://ntfy.sh';
-  const currentBase = () => store.devBase || store.base || null;
+  if (!store.bases) { store.bases = store.base ? { mac: store.base } : {}; }
+  const routeNow = () => (store.devBase ? 'mac' : store.route === 'pc' ? 'pc' : 'mac');
+  const routeName = () => (routeNow() === 'pc' ? store.pcName || 'Windows' : store.macName || 'Mac');
+  const baseOf = (r) => (store.bases && store.bases[r]) || null;
+  const currentBase = () => store.devBase || baseOf(routeNow()) || null;
   let discovering = null;
   async function discover() {
     if (store.devBase) return store.devBase;
@@ -337,22 +346,70 @@
     const r = await fetch(`${ntfyBase()}/${encodeURIComponent(store.topic)}/json?poll=1&since=24h`, { cache: 'no-store' });
     if (!r.ok) throw new Error('Couldn\'t look up the Mac\'s address');
     const txt = await r.text();
-    let url = null;
+    const found = {}; // the newest address of each computer: the Mac's "url: …", Windows' "win: …"
     for (const line of txt.split('\n')) {
       if (!line.trim()) continue;
       try {
         const o = JSON.parse(line);
-        if (o && o.event === 'message' && typeof o.message === 'string' && o.message.startsWith('url: ')) url = o.message.slice(5).trim();
+        if (!o || o.event !== 'message' || typeof o.message !== 'string') continue;
+        if (o.message.startsWith('url: ')) found.mac = o.message.slice(5).trim().replace(/\/+$/, '');
+        else if (o.message.startsWith('win: ')) found.pc = o.message.slice(5).trim().replace(/\/+$/, '');
       } catch (e) { /* skip */ }
     }
-    if (!url) throw new Error('The Mac hasn\'t posted its address yet. Is FoxyMind running?');
-    store.base = url.replace(/\/+$/, '');
+    if (!found.mac && !found.pc) throw new Error('Your computers haven\'t posted an address yet. Is FoxyMind running?');
+    store.bases = Object.assign({}, store.bases, found);
+    store.base = store.bases.mac || null; // (as older versions of the app kept it)
     save();
-    return store.base;
+    return currentBase() || baseOf('mac') || baseOf('pc');
   }
   function rediscover() {
     if (!discovering) discovering = discover().finally(() => { discovering = null; });
     return discovering;
+  }
+
+  // Which computer to talk to: the Mac when it answers, else Windows. One look at a time; the last answer is kept
+  // 4 s, so the lists polling together don't each go looking.
+  async function ping(base, ms) {
+    if (!base) return false;
+    try {
+      const ctl = window.AbortController ? new AbortController() : null;
+      const timer = ctl ? setTimeout(() => ctl.abort(), ms || 6000) : null;
+      const r = await fetch(`${base}/phone/api/ping`, { mode: 'cors', cache: 'no-store', credentials: 'omit', signal: ctl ? ctl.signal : undefined });
+      const j = await r.json();
+      if (timer) clearTimeout(timer);
+      return !!(r.ok && j && j.ok);
+    } catch (e) { return false; }
+  }
+  function setRoute(r) {
+    if (routeNow() === r) return;
+    store.route = r; save();
+    // (another computer answers now: what it can do and its lists are its own)
+    data.hello = null; data.machines = null; data.usage = null; data.folders = null; data.notes = null; data.captchas = null;
+    paintConn();
+    if (store.token) api('GET', '/hello').then(setHello).catch(() => {});
+    setTimeout(kickAll, 0);
+  }
+  let picking = null;
+  function pickRoute() {
+    if (store.devBase) return Promise.resolve(store.devBase);
+    if (picking) return picking;
+    if (conn.pickedAt && Date.now() - conn.pickedAt < 4000) return Promise.resolve(conn.picked ? baseOf(conn.picked) : null);
+    picking = (async () => {
+      if (store.topic && Date.now() - conn.lastDiscover > 15000) { try { await rediscover(); } catch (e) { /* the addresses we have */ } }
+      const [mac, pc] = await Promise.all([ping(baseOf('mac')), ping(baseOf('pc'))]);
+      conn.reach = { mac, pc };
+      conn.picked = mac ? 'mac' : pc ? 'pc' : null;
+      conn.pickedAt = Date.now();
+      if (conn.picked) setRoute(conn.picked);
+      return conn.picked ? baseOf(conn.picked) : null;
+    })().finally(() => { picking = null; });
+    return picking;
+  }
+  // In through Windows: look for the Mac every 20 s (its address may be a new one) and go back when it answers
+  async function backToMac() {
+    if (store.devBase || routeNow() !== 'pc' || !store.token) return;
+    if (Date.now() - conn.lastDiscover > 30000) { try { await rediscover(); } catch (e) { /* keep */ } }
+    if (await ping(baseOf('mac'))) { conn.reach = Object.assign({}, conn.reach, { mac: true }); conn.pickedAt = 0; setRoute('mac'); }
   }
 
   class ApiError extends Error {
@@ -365,19 +422,20 @@
     let base = currentBase();
     if (!base) {
       setConn('reconnecting');
-      try { base = await rediscover(); } catch (e) { setConn('offline'); throw new ApiError(e.message || 'Can\'t find your Mac', 0, true); }
+      try { base = await rediscover(); } catch (e) { setConn('offline'); throw new ApiError(e.message || 'Can\'t find your computers', 0, true); }
     }
     for (let attempt = 0; attempt < 2; attempt++) {
       let res = null;
       let data = null;
       let bad = false;
+      let late = false; // it ran out of time: the computer may have got it all the same
       try {
         const headers = {};
         if (opts.raw) headers['Content-Type'] = opts.type || 'application/octet-stream'; // (a photo, a piece of sound)
         else if (body !== undefined) headers['Content-Type'] = 'application/json';
         if (auth && store.token) headers.Authorization = `Bearer ${store.token}`;
         const ctl = window.AbortController ? new AbortController() : null;
-        const timer = ctl ? setTimeout(() => ctl.abort(), opts.timeout || 15000) : null;
+        const timer = ctl ? setTimeout(() => { late = true; ctl.abort(); }, opts.timeout || 15000) : null;
         res = await fetch(`${base}/phone/api${path}`, {
           method, headers, mode: 'cors', cache: 'no-store', credentials: 'omit',
           body: opts.raw ? opts.raw : body !== undefined ? JSON.stringify(body) : undefined,
@@ -387,6 +445,8 @@
         if (timer) clearTimeout(timer);
         try { data = text ? JSON.parse(text) : {}; } catch (e) { bad = true; } // a Cloudflare error page
         if (BAD_GATEWAY.includes(res.status)) bad = true;
+        // (Windows not knowing this phone is Windows not having heard from the Mac yet: only the Mac's word unpairs)
+        if (res.status === 401 && auth && !store.devBase && base === baseOf('pc') && base !== baseOf('mac')) bad = true;
       } catch (e) { bad = true; }
 
       if (!bad) {
@@ -398,22 +458,24 @@
       if (attempt > 0) break;
       setConn('reconnecting');
       if (store.devBase) { await sleep(400); continue; }
-      // the tunnel may have moved: read the current address from ntfy (not more than every 15 s)
-      if (!store.topic || Date.now() - conn.lastDiscover < 15000) break;
-      try {
-        const nb = await rediscover();
-        base = nb;
-      } catch (e) { break; }
+      // the tunnel may have moved, or this computer is offline and the other one isn't: the current addresses from
+      // ntfy, then whichever of the two answers (the Mac first)
+      if (!store.topic) break;
+      const nb = await pickRoute();
+      if (!nb) break;
+      // (a message or a key that may have arrived is never sent a second time: Windows' sessions answer on both ways in)
+      if (method !== 'GET' && late) break;
+      base = nb;
     }
-    // one missed answer is a blip (mobile data, a busy Mac): keep "Reconnecting…" while the Mac answered in the last
-    // 25 s; the polls carry on, and only a longer silence shows "Mac is offline or asleep"
+    // one missed answer is a blip (mobile data, a busy computer): keep "Reconnecting…" while one answered in the last
+    // 25 s; the polls carry on, and only a longer silence shows "offline or asleep"
     setConn(store.lastSeen && Date.now() - store.lastSeen < 25000 ? 'reconnecting' : 'offline');
-    throw new ApiError('Can\'t reach your Mac', 0, true);
+    throw new ApiError('Can\'t reach your computers', 0, true);
   }
 
   function onRevoked() {
     const had = !!store.token;
-    delete store.token; delete store.base; delete store.deviceId;
+    delete store.token; delete store.base; delete store.deviceId; store.bases = {}; delete store.route;
     save();
     stopGlobal();
     if (had) toast('This phone was unpaired. Pair it again to continue.', 'err');
@@ -463,7 +525,7 @@
     subs.forEach((f) => f());
   }
   // the bell (the Mac's notifications) and the computers (Mac + Windows twin): polled while the app is open
-  let notesLoop = null; let machinesLoop = null; let cvLoop = null;
+  let notesLoop = null; let machinesLoop = null; let cvLoop = null; let backLoop = null;
   // robot checks on any computer (lib/captchaview.js): a red line over the sessions list until solved
   async function fetchCaptchas() {
     if (!has('captcha')) return;
@@ -493,6 +555,7 @@
     if (!notesLoop) notesLoop = loop(fetchNotes, 20000);
     if (!machinesLoop) machinesLoop = loop(fetchMachines, 15000);
     if (!cvLoop) cvLoop = loop(fetchCaptchas, 5000);
+    if (!backLoop) backLoop = loop(backToMac, 20000);
     if (!data.hello) api('GET', '/hello').then((h) => { setHello(h); if (notesLoop) notesLoop.kick(); if (machinesLoop) machinesLoop.kick(); if (cvLoop) cvLoop.kick(); }).catch(() => {});
   }
   function stopGlobal() {
@@ -500,6 +563,7 @@
     if (notesLoop) { notesLoop.stop(); notesLoop = null; }
     if (machinesLoop) { machinesLoop.stop(); machinesLoop = null; }
     if (cvLoop) { cvLoop.stop(); cvLoop = null; }
+    if (backLoop) { backLoop.stop(); backLoop = null; }
     data.sessions = null; data.hello = null; data.folders = null; data.notes = null; data.machines = null; data.usage = null; data.captchas = null;
   }
   // last list from a previous run, so a cold start (or an offline one) shows something at once
@@ -595,23 +659,24 @@
     const p = parsePair(raw);
     if (!p) throw new Error('That doesn\'t look like a pair link. It ends with #pair=…');
     store.topic = p.topic;
-    delete store.base;
+    delete store.base; store.bases = {}; delete store.route;
     save();
     if (!store.devBase) {
-      try { await discover(); } catch (e) { throw new Error(`Can't find your Mac. ${e.message || ''}`.trim()); }
+      try { await discover(); } catch (e) { throw new Error(`Can't find your computers. ${e.message || ''}`.trim()); }
+      await pickRoute(); // (the Mac, or Windows when the Mac is offline: a pair link works on both)
     }
     let r;
     try {
       r = await api('POST', '/pair', { code: p.code, name: 'iPhone' }, { auth: false });
     } catch (e) {
-      if (e.offline) throw new Error('Can\'t reach your Mac. Is it awake with FoxyMind open?');
+      if (e.offline) throw new Error('Can\'t reach your Mac or Windows. Is one awake with FoxyMind open?');
       if (e.status === 400 || e.status === 403 || e.status === 404 || e.status === 410) throw new Error(`${e.message}. Ask FoxyMind for a new pair link.`);
       throw e;
     }
     if (!r || !r.token) throw new Error('The Mac didn\'t send a key back. Try a new pair link.');
     store.token = r.token;
     store.deviceId = r.deviceId;
-    store.macName = r.name || 'Mac';
+    if (routeNow() === 'pc') store.pcName = r.name || 'Windows'; else store.macName = r.name || 'Mac';
     store.pairedAt = Date.now();
     store.pairedWith = p.raw;
     save();
@@ -653,7 +718,7 @@
       btn.innerHTML = '<span class="spin"></span>Pairing…';
       try {
         await pair(raw);
-        toast(`Paired with ${store.macName || 'your Mac'}`);
+        toast(`Paired with ${routeName()}`);
         history.replaceState(null, '', location.pathname + location.search + '#/');
         route();
       } catch (e) {
@@ -730,7 +795,7 @@
   async function stopMoving(btn) {
     if (btn) btn.disabled = true;
     try { await api('DELETE', '/move-all'); if (data.machines) data.machines.moving = null; toast('Stopped. Sessions not moved yet stay where they are.'); subs.forEach((f) => f('machines')); }
-    catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : e.message, 'err'); if (btn) btn.disabled = false; }
+    catch (e) { toast(e.offline ? 'Can\'t reach your computers' : e.message, 'err'); if (btn) btn.disabled = false; }
   }
   // The red "Robot check" lines over the sessions list (open ones; a solved one shows green for 2 min)
   const cvHref = (c) => `#/cv/${encodeURIComponent(c.machine || 'mac')}/${encodeURIComponent(c.id)}`;
@@ -759,7 +824,7 @@
       const r = await api('POST', '/machines/pc/wake', {});
       toast(r && r.already ? 'Windows is already on.' : 'Waking Windows… it takes a minute or two.');
       setTimeout(() => { if (machinesLoop) machinesLoop.kick(); }, 4000);
-    } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Couldn't wake it: ${e.message}`, 'err'); }
+    } catch (e) { toast(e.offline ? 'Can\'t reach your computers' : `Couldn't wake it: ${e.message}`, 'err'); }
     if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Wake'; }
   }
   // the title bar's "Everything on" move-all switch: Off · Mac · Windows
@@ -777,7 +842,7 @@
       if (data.machines) data.machines.everythingOn = to === 'off' ? null : to;
       toast(to === 'off' ? 'Everything on is off. Sessions stay where they are.' : `Moving everything to ${to === 'pc' ? 'Windows' : 'the Mac'}…`);
       setTimeout(() => { if (machinesLoop) machinesLoop.kick(); if (sessionsLoop) sessionsLoop.kick(); }, 250);
-    } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Not changed: ${e.message}`, 'err'); }
+    } catch (e) { toast(e.offline ? 'Can\'t reach your computers' : `Not changed: ${e.message}`, 'err'); }
     if (after) after();
   }
 
@@ -806,7 +871,7 @@
           toast('Window reopened');
           if (sessionsLoop) sessionsLoop.kick();
           if (r && r.sessionId) go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
-        } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); busy = false; b.classList.remove('busy'); }
+        } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : err.message, 'err'); busy = false; b.classList.remove('busy'); }
       },
     });
   }
@@ -1194,7 +1259,7 @@
         mPicked = { model: r.model || want.model || now.model, effort: r.effort || want.effort || now.effort, at: Date.now() };
         toast(`Now on ${modelLabel(mPicked.model, mPicked.effort)}`);
         setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); }, 600);
-      } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : `Not changed: ${err.message}`, 'err'); }
+      } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : `Not changed: ${err.message}`, 'err'); }
       mBusy = false; mSig = '~';
       mpanel.classList.remove('busy'); mchip.classList.remove('busy');
       paintModel();
@@ -1215,7 +1280,7 @@
           box.value = t; lsSet(draftKey, t); grow();
           toast('Prompt enhanced', '', { action: 'Undo', onAction: () => { box.value = before; lsSet(draftKey, before); grow(); } });
         }
-      } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't enhance: ${err.message}`, 'err'); }
+      } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : `Couldn't enhance: ${err.message}`, 'err'); }
       enhBusy = false; box.readOnly = false; enhBtn.classList.remove('busy'); enhBtn.disabled = false;
       $('span', enhBtn).textContent = 'Enhance';
       paintModel();
@@ -1455,7 +1520,7 @@
         await api('POST', `/sessions/${encodeURIComponent(id)}/key`, { key: b.dataset.n });
         toast('Answered');
         setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); if (qLoop) qLoop.kick(); if (screenLoop) screenLoop.kick(); }, 400);
-      } catch (err) { qBusy = false; qcard.classList.remove('busy'); b.classList.remove('picked'); toast(err.offline ? 'Can\'t reach your Mac' : `Not sent: ${err.message}`, 'err'); }
+      } catch (err) { qBusy = false; qcard.classList.remove('busy'); b.classList.remove('picked'); toast(err.offline ? 'Can\'t reach your computers' : `Not sent: ${err.message}`, 'err'); }
     });
     el.addEventListener('click', (e) => { if (e.target.closest('[data-act="wrap"]')) { wrap = !wrap; lsSet('termWrap', wrap ? '1' : '0'); paintWrap(); } });
 
@@ -1469,7 +1534,7 @@
         screenAtBottom = true;
         setTimeout(() => { if (screenLoop) screenLoop.kick(); }, 180);
         setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); }, 500);
-      } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : `Key not sent: ${err.message}`, 'err'); }
+      } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : `Key not sent: ${err.message}`, 'err'); }
     });
 
     // ----- composer -----
@@ -1511,7 +1576,7 @@
         const name = encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, ''));
         p.job = shrinkPhoto(f)
           .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${name}`, undefined, { raw: b, type: /^image\/(png|gif|webp|jpeg)$/.test(b.type) ? b.type : 'image/jpeg', timeout: 120000 }))
-          .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your Mac. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
+          .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your computers. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
           .then(paintShots);
         shots.push(p);
       }
@@ -1601,7 +1666,7 @@
       if (rec !== r) return;
       rec = null; micOff(r); micDrop(r); paintMic();
       toast(e && e.name === 'NotAllowedError' ? 'The mic is blocked for this app. Allow the microphone when it asks (or in Settings), then try again.'
-        : e && e.offline ? 'Can\'t reach your Mac.' : `Mic: ${(e && e.message) || e}`, 'err');
+        : e && e.offline ? 'Can\'t reach your computers.' : `Mic: ${(e && e.message) || e}`, 'err');
     }
     async function micStop() {
       const r = rec; if (!r) return;
@@ -1633,7 +1698,7 @@
         if (shown != null && box.value !== shown) return; // (typed in the box meanwhile: leave it)
         if (!t && shown == null) { toast('Heard nothing.'); return; }
         put(t || heard);
-      } catch (e) { toast(e.offline ? `Can't reach your Mac. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
+      } catch (e) { toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
       finally { micBtn.disabled = false; box.placeholder = 'Message'; }
     }
     micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
@@ -1684,7 +1749,7 @@
         lsSet(draftKey, box.value);
         grow();
         if (tab === 'chat') renderChat();
-        toast(e.offline ? 'Can\'t reach your Mac. Your message is still in the box.' : `Not sent: ${e.message}`, 'err');
+        toast(e.offline ? 'Can\'t reach your computers. Your message is still in the box.' : `Not sent: ${e.message}`, 'err');
       }
     }
 
@@ -1797,7 +1862,7 @@
           const b = e.target.closest('button[data-act], button[data-acct]');
           if (!b || busy) return;
           const act = b.dataset.act;
-          const run = async (fn) => { busy = true; b.classList.add('busy'); try { await fn(); } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); } busy = false; b.classList.remove('busy'); };
+          const run = async (fn) => { busy = true; b.classList.add('busy'); try { await fn(); } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : err.message, 'err'); } busy = false; b.classList.remove('busy'); };
           if (act === 'rename') {
             sh.set('Rename', `<form class="rename"><input class="rin" type="text" maxlength="120" value="${esc(meta ? meta.title || '' : '')}" aria-label="New name" enterkeyhint="done" autocomplete="off"><button type="submit" class="btn primary">Save</button></form>`, '', true);
             const f = $('form', sh.body); const inp = $('.rin', sh.body);
@@ -1875,7 +1940,7 @@
             await api('POST', `/sessions/${sid}/keep-awake`, { on: sw.checked });
             if (meta) meta.keepAwake = sw.checked;
             toast(sw.checked ? 'Kept awake' : 'Sleeps when idle again');
-          } catch (err) { sw.checked = !sw.checked; toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); }
+          } catch (err) { sw.checked = !sw.checked; toast(err.offline ? 'Can\'t reach your computers' : err.message, 'err'); }
           sw.disabled = false;
         },
       });
@@ -2027,7 +2092,7 @@
           const r = await api('POST', `/folders/${encodeURIComponent(fid)}/new`, { provider: kb.dataset.kind }, { timeout: 60000 });
           go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
         } catch (err) {
-          toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't start: ${err.message}`, 'err');
+          toast(err.offline ? 'Can\'t reach your computers' : `Couldn't start: ${err.message}`, 'err');
           kb.classList.remove('busy'); $('span', kb).textContent = label;
         }
         busy = false;
@@ -2040,7 +2105,7 @@
           const r = await api('POST', `/folders/${encodeURIComponent(fid)}/new`, { provider: 'claude', model: start.model, effort: start.effort }, { timeout: 60000 });
           go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
         } catch (err) {
-          toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't start: ${err.message}`, 'err');
+          toast(err.offline ? 'Can\'t reach your computers' : `Couldn't start: ${err.message}`, 'err');
           newBtn.innerHTML = `${I.plus}New Claude chat`;
         }
         busy = false;
@@ -2055,7 +2120,7 @@
         const r = await api('POST', `/folders/${encodeURIComponent(fid)}/resume`, { chatId: row.dataset.chat, machine: row.dataset.machine || undefined });
         go(`#/s/${encodeURIComponent(r.sessionId)}`, 'push');
       } catch (err) {
-        toast(err.offline ? 'Can\'t reach your Mac' : `Couldn't resume: ${err.message}`, 'err');
+        toast(err.offline ? 'Can\'t reach your computers' : `Couldn't resume: ${err.message}`, 'err');
         row.style.opacity = '';
       }
       busy = false;
@@ -2138,7 +2203,7 @@
       if (refreshing) return;
       refreshing = true; render();
       const b = $('[data-act="urefresh"]', el); if (b) b.classList.add('spinning');
-      try { data.usage = await api('POST', '/usage/refresh', {}, { timeout: 30000 }); err = null; } catch (e) { toast(e.offline ? 'Can\'t reach your Mac' : `Couldn't refresh: ${e.message}`, 'err'); }
+      try { data.usage = await api('POST', '/usage/refresh', {}, { timeout: 30000 }); err = null; } catch (e) { toast(e.offline ? 'Can\'t reach your computers' : `Couldn't refresh: ${e.message}`, 'err'); }
       refreshing = false; if (b) b.classList.remove('spinning');
       render();
     }
@@ -2156,7 +2221,7 @@
           toast(skip ? `${sk.dataset.name} is skipped` : `${sk.dataset.name} is used again`);
           render();
           setTimeout(load, 1500);
-        } catch (er) { sk.disabled = false; toast(er.offline ? 'Can\'t reach your Mac' : er.message, 'err'); }
+        } catch (er) { sk.disabled = false; toast(er.offline ? 'Can\'t reach your computers' : er.message, 'err'); }
         return;
       }
       const h = e.target.closest('[data-act="utoggle"]');
@@ -2241,8 +2306,15 @@
       const isMac = (m) => m.id === 'mac' || m.name === (store.macName || 'Mac');
       // (with the Computers section, this one only shows the phone's own link to the Mac)
       const rows = machines.length && !has('machines') ? machines : [{ id: 'mac', name: store.macName || 'Mac' }];
+      // two ways in: this phone's own link to each computer (the one in use, and the other as it last answered)
+      const ways = baseOf('pc') && !store.devBase ? ['mac', 'pc'].filter(baseOf).map((r) => {
+        const used = routeNow() === r; const reach = conn.reach ? conn.reach[r] : undefined;
+        const on = used ? conn.state === 'online' : reach === true;
+        const val = used ? (conn.state === 'online' ? 'In use' : state) : reach === true ? 'Ready' : reach === false ? 'Can\'t be reached' : 'Standing by';
+        return `<div class="lrow"><span class="mdot${on ? ' on' : ''}"></span><span class="grow">Through ${esc(r === 'pc' ? store.pcName || 'Windows' : store.macName || 'Mac')}</span><span class="val">${val}</span></div>`;
+      }).join('') : null;
       return `<div class="glabel">Connection</div><div class="list">
-        ${rows.map((m) => {
+        ${ways != null ? ways : rows.map((m) => {
           const on = isMac(m) ? conn.state === 'online' : !!m.online;
           const val = isMac(m) ? state : (m.online ? 'Online' : 'Off or asleep');
           return `<div class="lrow"><span class="mdot${on ? ' on' : ''}"></span><span class="grow">${esc(m.name)}</span><span class="val">${val}</span></div>`;
@@ -2508,7 +2580,7 @@
           if (!alive) return;
           if (e.status === 404) { onStatus({ status: 'gone' }); return; }
           setLive('Reconnecting…', 'off');
-          showMsg(e.offline ? 'Can\'t reach your Mac right now. Trying again…' : e.message || 'Something went wrong. Trying again…');
+          showMsg(e.offline ? 'Can\'t reach your computers right now. Trying again…' : e.message || 'Something went wrong. Trying again…');
           await sleep(1500);
         }
       }
@@ -2519,7 +2591,7 @@
     function flush(f) {
       if (!f || !f.pending.length) return;
       const events = f.pending.splice(0);
-      send('/input', { g: f.g, seq: f.seq++, events }).then((r) => { if (r && r.status) onStatus(r); }).catch((e) => { if (e.status === 404) onStatus({ status: 'gone' }); else toast(e.offline ? 'Can\'t reach your Mac' : e.message, 'err'); });
+      send('/input', { g: f.g, seq: f.seq++, events }).then((r) => { if (r && r.status) onStatus(r); }).catch((e) => { if (e.status === 404) onStatus({ status: 'gone' }); else toast(e.offline ? 'Can\'t reach your computers' : e.message, 'err'); });
     }
     function showDot(cx, cy, on) {
       const S = stageBox();
@@ -2629,7 +2701,7 @@
     });
     async function typeIt() {
       const text = tin.value; if (!text) return;
-      try { await send('/type', { text }); tin.value = ''; toast('Typed into the page'); } catch (err) { toast(err.offline ? 'Can\'t reach your Mac' : err.message, 'err'); }
+      try { await send('/type', { text }); tin.value = ''; toast('Typed into the page'); } catch (err) { toast(err.offline ? 'Can\'t reach your computers' : err.message, 'err'); }
     }
     tin.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); typeIt(); } });
 

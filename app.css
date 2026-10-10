@@ -109,6 +109,8 @@ body.kb { --sab: 0px; }
 .offline-slot:empty { display: none; }
 .offbanner { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--text-2); }
 .offbanner b { color: var(--text); font-weight: 600; display: block; font-size: 15px; }
+.offbanner.via { background: rgba(245,192,46,.07); }
+.offbanner.via b { color: #ffd978; }
 .offbanner .grow { flex: 1; min-width: 0; }
 .btn-sm { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--bg-3); border: 1px solid var(--line-2); color: var(--text); font-size: 14.5px; font-weight: 600; flex: none; transition: opacity .12s; }
 .btn-sm:active { opacity: .6; }
