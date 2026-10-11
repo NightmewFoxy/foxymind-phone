@@ -10,6 +10,7 @@
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const MIC_TAIL_MS = 600; // (the mic keeps listening this long after the stop tap: browsers hand sound over late)
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
   const appEl = document.getElementById('app');
@@ -1646,6 +1647,7 @@
     // into the box where the cursor is (not sent), like F5. The sound goes to the Mac in pieces while you speak. -----
     const micBtn = $('.micbtn', el); const micline = $('.micline', el); const mtext = $('.mtext', el);
     let rec = null; // { id, base, ctx, stream, proc, queue, all, lost, sending, tick }
+    let micWriting = null; // (a stop still writing the words down: Send waits for it, so the whole sentence goes)
     // Never lose the words (owner 11 Oct 2026 on the Tesla: "tap the mic, speak, tap again, nothing comes out"):
     // a recording lives on the computer it started on, so every piece and the stop go to THAT computer (the app
     // moves between the Mac and Windows when one stops answering; the other one said "That recording has ended").
@@ -1656,6 +1658,7 @@
       micBtn.classList.toggle('on', !!rec); micBtn.innerHTML = rec ? I.stop : I.mic;
       micBtn.setAttribute('aria-label', rec ? 'Stop and put the words in the box' : 'Talk (Grok mic)');
       micline.hidden = !rec;
+      sendBtn.disabled = !rec && !box.value.trim() && !shots.length; // (Send while it listens = stop and send)
     }
     function to16k(f32, rate) {
       const r = rate / 16000; const n = Math.floor(f32.length / r); const out = new Int16Array(n);
@@ -1693,7 +1696,7 @@
       } finally { r.sending = false; }
     }
     function micOff(r) {
-      clearInterval(r.tick);
+      r.closed = true; clearInterval(r.tick);
       try { if (r.proc) r.proc.disconnect(); } catch (e) {}
       try { if (r.stream) r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
       try { if (r.ctx) r.ctx.close(); } catch (e) {}
@@ -1720,8 +1723,8 @@
         if (rec !== r) { micOff(r); micDrop(r); return; } // (cancelled meanwhile)
         await r.ctx.resume();
         const src = r.ctx.createMediaStreamSource(stream);
-        r.proc = r.ctx.createScriptProcessor(4096, 1, 1);
-        r.proc.onaudioprocess = (e) => { if (rec === r) { const pcm = to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate); r.queue.push(pcm); r.all.push(pcm); } };
+        r.proc = r.ctx.createScriptProcessor(2048, 1, 1);
+        r.proc.onaudioprocess = (e) => { if (!r.closed) { const pcm = to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate); r.queue.push(pcm); r.all.push(pcm); } };
         src.connect(r.proc); r.proc.connect(r.ctx.destination);
         r.tick = setInterval(() => { pump(r).catch((e) => pieceFailed(r, e)); }, 250);
       } catch (e) { micFail(r, e); }
@@ -1734,9 +1737,10 @@
     }
     async function micStop() {
       const r = rec; if (!r) return;
-      rec = null; micOff(r); paintMic();
-      if (!r.id && !r.lost) return;
+      rec = null; paintMic();
+      if (!r.id && !r.lost) { micOff(r); return; }
       micBtn.disabled = true; box.placeholder = 'Writing it down…';
+      let written; const writing = micWriting = new Promise((res) => { written = res; });
       const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
       const before = box.value.slice(0, a); const after = box.value.slice(b);
       const put = (t) => { // (t where the cursor was; called again to swap the words so far for Grok's final text)
@@ -1748,6 +1752,11 @@
       };
       const heard = (mtext.textContent || '').trim();
       const shown = heard && heard !== 'Listening…' ? put(heard) : null; // (in the box at once, like F5)
+      // Keep listening a moment after the tap (owner 11 Oct 2026 on the Tesla: "I love you" came out "I love"): a
+      // browser hands the sound over a few hundred ms late, so the last word was still on its way when the mic was
+      // closed. The Mac's F5 has next to no delay. (The final text, with that last word, swaps in after.)
+      if (r.proc) await sleep(MIC_TAIL_MS);
+      micOff(r);
       try {
         let x = null; let failed = null;
         if (!r.lost) {
@@ -1773,7 +1782,7 @@
         if (!t && shown == null) { toast('Heard nothing.'); return; }
         put(t || heard);
       } catch (e) { toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
-      finally { micBtn.disabled = false; box.placeholder = 'Message'; }
+      finally { micBtn.disabled = false; box.placeholder = 'Message'; if (micWriting === writing) micWriting = null; written(); }
     }
     micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
     micBtn.addEventListener('click', () => { if (rec) micStop(); else micStart(); });
@@ -1790,6 +1799,10 @@
     sendBtn.addEventListener('click', send);
 
     async function send() {
+      // Send right after the mic (or while it still listens) sends the WHOLE sentence, like Enter after F5 on the Mac
+      // (owner 11 Oct 2026: "I can literally click enter right away without even checking the words").
+      if (rec) micStop();
+      if (micWriting) { sendBtn.disabled = true; await micWriting; }
       const text = box.value;
       if (!text.trim() && !shots.length) return;
       const sent = shots; // (photos still on their way are waited for)
