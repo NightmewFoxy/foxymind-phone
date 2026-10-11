@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '9.0';
+  const APP_VERSION = '9.1';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -667,12 +667,15 @@
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`foxymind-pair:${code}`));
     const hex = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
     let topic = null;
-    try {
-      const r = await fetch(`${ntfyBase()}/fm-pair-${hex.slice(0, 32)}/json?poll=1&since=1h`, { cache: 'no-store' });
-      for (const line of (await r.text()).split('\n')) {
-        try { const o = JSON.parse(line); const m = o && o.event === 'message' && /^topic: (fm-phone-[0-9a-f]{24})$/.exec(String(o.message || '').trim()); if (m) topic = m[1]; } catch (e) { /* skip */ }
-      }
-    } catch (e) { throw new Error('Can\'t check the code: no internet?'); }
+    for (let tries = 0; !topic && tries < 3; tries++) { // (a code made a moment ago can take a few seconds to show up on ntfy)
+      if (tries) await sleep(2500);
+      try {
+        const r = await fetch(`${ntfyBase()}/fm-pair-${hex.slice(0, 32)}/json?poll=1&since=1h`, { cache: 'no-store' });
+        for (const line of (await r.text()).split('\n')) {
+          try { const o = JSON.parse(line); const m = o && o.event === 'message' && /^topic: (fm-phone-[0-9a-f]{24})$/.exec(String(o.message || '').trim()); if (m) topic = m[1]; } catch (e) { /* skip */ }
+        }
+      } catch (e) { if (tries === 2) throw new Error('Can\'t check the code: no internet?'); }
+    }
     if (!topic) throw new Error('That code isn\'t known (or it\'s over 15 minutes old). Check it, or get a new one.');
     return pair(`${topic}.${code}`);
   }
