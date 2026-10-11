@@ -10,7 +10,8 @@
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const MIC_TAIL_MS = 600; // (the mic keeps listening this long after the stop tap: browsers hand sound over late)
+  const MIC_TAIL_MS = 600; // (the mic keeps listening up to this long after the stop tap: browsers hand sound over late)
+  const MIC_QUIET_MS = 200; // (… but stops once this much quiet has come in after the tap: the last word is in)
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
   const appEl = document.getElementById('app');
@@ -1724,7 +1725,13 @@
         await r.ctx.resume();
         const src = r.ctx.createMediaStreamSource(stream);
         r.proc = r.ctx.createScriptProcessor(2048, 1, 1);
-        r.proc.onaudioprocess = (e) => { if (!r.closed) { const pcm = to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate); r.queue.push(pcm); r.all.push(pcm); } };
+        r.proc.onaudioprocess = (e) => {
+          if (r.closed) return;
+          const f = e.inputBuffer.getChannelData(0); const pcm = to16k(f, r.ctx.sampleRate); r.queue.push(pcm); r.all.push(pcm);
+          let sq = 0; for (let i = 0; i < f.length; i += 4) sq += f[i] * f[i]; const rms = Math.sqrt(sq / (f.length / 4));
+          r.floor = Math.min(r.floor == null ? 1 : r.floor * 1.01 + 1e-4, rms); // (the room's quiet level, slowly drifting up)
+          if (r.tail) r.tail(rms, f.length / r.ctx.sampleRate);
+        };
         src.connect(r.proc); r.proc.connect(r.ctx.destination);
         r.tick = setInterval(() => { pump(r).catch((e) => pieceFailed(r, e)); }, 250);
       } catch (e) { micFail(r, e); }
@@ -1755,7 +1762,11 @@
       // Keep listening a moment after the tap (owner 11 Oct 2026 on the Tesla: "I love you" came out "I love"): a
       // browser hands the sound over a few hundred ms late, so the last word was still on its way when the mic was
       // closed. The Mac's F5 has next to no delay. (The final text, with that last word, swaps in after.)
-      if (r.proc) await sleep(MIC_TAIL_MS);
+      if (r.proc) await new Promise((done) => { // (until MIC_QUIET_MS of quiet came in after the tap, at most MIC_TAIL_MS)
+        let quiet = 0; const thr = Math.max(0.006, (r.floor || 0) * 3);
+        r.tail = (rms, sec) => { quiet = rms < thr ? quiet + sec * 1000 : 0; if (quiet >= MIC_QUIET_MS) done(); };
+        setTimeout(done, MIC_TAIL_MS);
+      });
       micOff(r);
       try {
         let x = null; let failed = null;
@@ -1784,6 +1795,10 @@
       } catch (e) { toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
       finally { micBtn.disabled = false; box.placeholder = 'Message'; if (micWriting === writing) micWriting = null; written(); }
     }
+    // keep a Grok mic ready on the computer while this chat is on screen (no ~1 s connect after the tap, lib/phonemic.js)
+    const micWarm = () => { if (!document.hidden && !micBtn.hidden && data.hello && (data.hello.features || []).includes('micwarm')) api('POST', '/mic/warm', {}).catch(() => {}); };
+    const warmTick = setInterval(micWarm, 35000); setTimeout(micWarm, 300);
+    const onVis = () => { if (!document.hidden) micWarm(); }; document.addEventListener('visibilitychange', onVis);
     micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
     micBtn.addEventListener('click', () => { if (rec) micStop(); else micStart(); });
     $('[data-act="mcancel"]', el).addEventListener('click', () => { const r = rec; if (!r) return; rec = null; micOff(r); micDrop(r); paintMic(); });
@@ -2055,6 +2070,7 @@
         clearTimeout(draftTimer);
         lsSet(draftKey, box.value);
         if (rec) { const r = rec; rec = null; micOff(r); micDrop(r); }
+        clearInterval(warmTick); document.removeEventListener('visibilitychange', onVis);
         for (const p of shots) URL.revokeObjectURL(p.url);
         unwatch();
       },
