@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '9.1';
+  const APP_VERSION = '9.2';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -419,7 +419,7 @@
 
   async function api(method, path, body, opts = {}) {
     const auth = opts.auth !== false;
-    let base = currentBase();
+    let base = opts.base || currentBase(); // (opts.base: this computer only, e.g. the one holding a mic recording)
     if (!base) {
       setConn('reconnecting');
       try { base = await rediscover(); } catch (e) { setConn('offline'); throw new ApiError(e.message || 'Can\'t find your computers', 0, true); }
@@ -453,11 +453,12 @@
         if (res.status === 401 && auth) { onRevoked(); throw new ApiError('This phone was unpaired', 401); }
         markOk();
         if (!res.ok) throw new ApiError((data && data.error) || `Something went wrong (${res.status})`, res.status);
+        if (opts.used) opts.used(base);
         return data;
       }
       if (attempt > 0) break;
       setConn('reconnecting');
-      if (store.devBase) { await sleep(400); continue; }
+      if (store.devBase || opts.base) { if (opts.base && method !== 'GET' && late) break; await sleep(400); continue; }
       // the tunnel may have moved, or this computer is offline and the other one isn't: the current addresses from
       // ntfy, then whichever of the two answers (the Mac first)
       if (!store.topic) break;
@@ -1644,7 +1645,12 @@
     // ----- the mic: Grok Voice Transcribe, the same as F5 on the Mac. Tap to talk, tap again to stop: the words go
     // into the box where the cursor is (not sent), like F5. The sound goes to the Mac in pieces while you speak. -----
     const micBtn = $('.micbtn', el); const micline = $('.micline', el); const mtext = $('.mtext', el);
-    let rec = null; // { id, ctx, stream, proc, queue, sending, tick }
+    let rec = null; // { id, base, ctx, stream, proc, queue, all, lost, sending, tick }
+    // Never lose the words (owner 11 Oct 2026 on the Tesla: "tap the mic, speak, tap again, nothing comes out"):
+    // a recording lives on the computer it started on, so every piece and the stop go to THAT computer (the app
+    // moves between the Mac and Windows when one stops answering; the other one said "That recording has ended").
+    // The phone also keeps the whole recording: if the live one is lost anyway (server restart, long signal gap),
+    // the stop sends all of it to /mic/once on whichever computer answers.
     function paintMic() {
       micBtn.hidden = !!(data.hello && data.hello.mic === false);
       micBtn.classList.toggle('on', !!rec); micBtn.innerHTML = rec ? I.stop : I.mic;
@@ -1667,10 +1673,11 @@
     }
     const micSeq = () => !!(data.hello && (data.hello.features || []).includes('micseq'));
     async function pump(r, all) {
-      if (micSeq() && !all) { // (numbered pieces: each goes at once, the Mac puts them in order)
+      if (r.lost) { r.queue.length = 0; return; } // (the live recording is gone: the stop sends the whole thing)
+      if (r.seqMode && !all) { // (numbered pieces: each goes at once, the Mac puts them in order)
         if (!r.queue.length || !r.id) return;
         const seq = r.seq++; const pcm = joinPcm(r.queue.splice(0));
-        const x = await api('POST', `/mic/${r.id}/audio?seq=${seq}`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000 });
+        const x = await api('POST', `/mic/${r.id}/audio?seq=${seq}`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000, base: r.base });
         if (rec === r && x && x.text && seq >= (r.shown || 0)) { r.shown = seq; mtext.textContent = x.text; }
         return;
       }
@@ -1679,7 +1686,7 @@
         while (r.queue.length && r.id) {
           const parts = r.queue.splice(0); const n = parts.reduce((a, p) => a + p.length, 0);
           const pcm = new Int16Array(n); let o = 0; for (const p of parts) { pcm.set(p, o); o += p.length; }
-          const x = await api('POST', `/mic/${r.id}/audio`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000 });
+          const x = await api('POST', `/mic/${r.id}/audio`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000, base: r.base });
           if (rec === r && x && x.text) mtext.textContent = x.text;
           if (!all) break;
         }
@@ -1691,25 +1698,32 @@
       try { if (r.stream) r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
       try { if (r.ctx) r.ctx.close(); } catch (e) {}
     }
-    function micDrop(r) { if (r.id) api('DELETE', `/mic/${r.id}`).catch(() => {}); }
+    function micDrop(r) { if (r.id) api('DELETE', `/mic/${r.id}`, undefined, { base: r.base }).catch(() => {}); }
+    // a piece that didn't land (a 404 = the recording is gone there; anything else = a hole in it, words would be
+    // missing): carry on recording, the stop sends the whole thing. (An older computer without /mic/once: as before.)
+    function pieceFailed(r, e) { if (r.once) { r.lost = true; if (r.id) micDrop(r); } else micFail(r, e); }
     async function micStart() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This phone can\'t record here.', 'err'); return; }
-      const r = { id: null, ctx: new AC(), queue: [], seq: 0 }; // (the sound system is made in the tap itself: iOS wants that)
+      const r = { id: null, ctx: new AC(), queue: [], all: [], seq: 0, seqMode: micSeq(), once: !!(data.hello && (data.hello.features || []).includes('miconce')) }; // (the sound system is made in the tap itself: iOS wants that)
       rec = r; mtext.textContent = 'Listening…'; paintMic();
       try {
         const [stream, started] = await Promise.all([
           navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }),
-          api('POST', '/mic', {}),
+          api('POST', '/mic', {}, { used: (b) => { r.base = b; } }).catch((e) => ({ failed: e })),
         ]);
-        r.stream = stream; r.id = started.id;
+        r.stream = stream;
+        if (started.failed) { // (no computer took it just now: record anyway, the stop sends it all at once)
+          if (!r.once || (started.failed.status && started.failed.status !== 404 && !started.failed.offline)) throw started.failed;
+          r.lost = true;
+        } else r.id = started.id;
         if (rec !== r) { micOff(r); micDrop(r); return; } // (cancelled meanwhile)
         await r.ctx.resume();
         const src = r.ctx.createMediaStreamSource(stream);
         r.proc = r.ctx.createScriptProcessor(4096, 1, 1);
-        r.proc.onaudioprocess = (e) => { if (rec === r) r.queue.push(to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate)); };
+        r.proc.onaudioprocess = (e) => { if (rec === r) { const pcm = to16k(e.inputBuffer.getChannelData(0), r.ctx.sampleRate); r.queue.push(pcm); r.all.push(pcm); } };
         src.connect(r.proc); r.proc.connect(r.ctx.destination);
-        r.tick = setInterval(() => { pump(r).catch((e) => micFail(r, e)); }, 250);
+        r.tick = setInterval(() => { pump(r).catch((e) => pieceFailed(r, e)); }, 250);
       } catch (e) { micFail(r, e); }
     }
     function micFail(r, e) {
@@ -1721,7 +1735,7 @@
     async function micStop() {
       const r = rec; if (!r) return;
       rec = null; micOff(r); paintMic();
-      if (!r.id) return;
+      if (!r.id && !r.lost) return;
       micBtn.disabled = true; box.placeholder = 'Writing it down…';
       const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
       const before = box.value.slice(0, a); const after = box.value.slice(b);
@@ -1735,15 +1749,25 @@
       const heard = (mtext.textContent || '').trim();
       const shown = heard && heard !== 'Listening…' ? put(heard) : null; // (in the box at once, like F5)
       try {
-        let x;
-        if (micSeq()) { // (the last piece rides with the end: one trip to the Mac)
-          const tail = joinPcm(r.queue.splice(0));
-          x = await api('POST', `/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([tail.buffer]), timeout: 30000 });
-        } else {
-          while (r.sending) await sleep(50);
-          await pump(r, true);
-          x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000 });
+        let x = null; let failed = null;
+        if (!r.lost) {
+          try {
+            if (r.seqMode) { // (the last piece rides with the end: one trip to the Mac)
+              const tail = joinPcm(r.queue.splice(0));
+              x = await api('POST', `/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([tail.buffer]), timeout: 30000, base: r.base });
+            } else {
+              while (r.sending) await sleep(50);
+              await pump(r, true);
+              x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000, base: r.base });
+            }
+          } catch (e) { failed = e; }
         }
+        // the live recording was lost or broke: the whole of it, once, to whichever computer answers
+        if ((r.lost || failed) && r.once && r.all.length && !(failed && /out of usage/.test(failed.message || ''))) {
+          box.placeholder = 'Writing it down (sending it all)…';
+          const pcm = joinPcm(r.all);
+          x = await api('POST', '/mic/once', undefined, { raw: new Blob([pcm.buffer]), timeout: 120000 });
+        } else if (failed) throw failed;
         const t = String((x && x.text) || '').trim();
         if (shown != null && box.value !== shown) return; // (typed in the box meanwhile: leave it)
         if (!t && shown == null) { toast('Heard nothing.'); return; }
