@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '8.0';
+  const APP_VERSION = '9.0';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -655,6 +655,28 @@
     return null;
   }
 
+  // v9 (11 Oct 2026, the owner's Tesla): a 6-letter code typed on a screen with no Telegram or clipboard. The computer
+  // posted its topic on ntfy under a name only the code gives (lib/phone.js pairTopic: the same sum).
+  const CODE_RE = /^[A-HJKMNP-Z2-9]{6}$/;
+  const normCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const deviceName = () => (/Tesla/i.test(navigator.userAgent) ? 'Tesla' : isIOS ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android' : 'Browser');
+  async function pairCode(raw) {
+    const code = normCode(raw);
+    if (!CODE_RE.test(code)) throw new Error('A pair code is 6 letters and numbers, like K7MPQ3.');
+    if (!(window.crypto && crypto.subtle)) throw new Error('This browser can\'t check the code here. Use a pair link instead.');
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`foxymind-pair:${code}`));
+    const hex = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+    let topic = null;
+    try {
+      const r = await fetch(`${ntfyBase()}/fm-pair-${hex.slice(0, 32)}/json?poll=1&since=1h`, { cache: 'no-store' });
+      for (const line of (await r.text()).split('\n')) {
+        try { const o = JSON.parse(line); const m = o && o.event === 'message' && /^topic: (fm-phone-[0-9a-f]{24})$/.exec(String(o.message || '').trim()); if (m) topic = m[1]; } catch (e) { /* skip */ }
+      }
+    } catch (e) { throw new Error('Can\'t check the code: no internet?'); }
+    if (!topic) throw new Error('That code isn\'t known (or it\'s over 15 minutes old). Check it, or get a new one.');
+    return pair(`${topic}.${code}`);
+  }
+
   async function pair(raw) {
     const p = parsePair(raw);
     if (!p) throw new Error('That doesn\'t look like a pair link. It ends with #pair=…');
@@ -667,10 +689,10 @@
     }
     let r;
     try {
-      r = await api('POST', '/pair', { code: p.code, name: 'iPhone' }, { auth: false });
+      r = await api('POST', '/pair', { code: p.code, name: deviceName() }, { auth: false });
     } catch (e) {
       if (e.offline) throw new Error('Can\'t reach your Mac or Windows. Is one awake with FoxyMind open?');
-      if (e.status === 400 || e.status === 403 || e.status === 404 || e.status === 410) throw new Error(`${e.message}. Ask FoxyMind for a new pair link.`);
+      if (e.status === 400 || e.status === 403 || e.status === 404 || e.status === 410) throw new Error(/^[A-Z0-9]{6}$/.test(p.code) ? 'That code was already used or is too old. Get a new one.' : `${e.message}. Ask FoxyMind for a new pair link.`);
       throw e;
     }
     if (!r || !r.token) throw new Error('The Mac didn\'t send a key back. Try a new pair link.');
@@ -698,8 +720,15 @@
         <p class="fine">Copy it now: your iPhone keeps the Home Screen app separate from Safari, so the link is pasted there.</p>` : '<p class="fine">Get your pair link from FoxyMind on your Mac (Settings → Phone) or from Telegram.</p>'}`;
     } else {
       body = `${heroHtml}
+        <div class="card codecard">
+          <h3>Have a pair code?</h3>
+          <input class="codebox" maxlength="7" placeholder="K7MPQ3" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Pair code">
+          <div class="btnrow"><button class="btn primary" data-act="paircode" disabled>Pair</button></div>
+          <p class="err codeerr" role="alert"></p>
+          <p class="codehint">On your iPhone: FoxyMind → Settings → <b>Pair another screen</b>.</p>
+        </div>
         <div class="card">
-          <h3>Paste pair link</h3>
+          <h3>Or paste a pair link</h3>
           <textarea class="pairbox" rows="3" placeholder="https://…#pair=…" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Pair link"></textarea>
           <div class="btnrow"><button class="btn secondary" data-act="paste">Paste</button><button class="btn primary" data-act="pair" disabled>Pair</button></div>
           <p class="err" role="alert"></p>
@@ -709,7 +738,25 @@
     const el = screenEl('pair', `<div class="scroll"><div>${body}</div></div>`);
     const box = $('.pairbox', el);
     const btn = $('[data-act="pair"]', el);
-    const err = $('.err', el);
+    const err = $('.err:not(.codeerr)', el);
+    const cbox = $('.codebox', el);
+    if (cbox) {
+      const cbtn = $('[data-act="paircode"]', el); const cerr = $('.codeerr', el);
+      const ready = () => CODE_RE.test(normCode(cbox.value));
+      const go1 = async () => {
+        if (!ready() || cbtn.dataset.busy) return;
+        cerr.textContent = ''; cbtn.dataset.busy = '1'; cbtn.disabled = true; cbtn.innerHTML = '<span class="spin"></span>Pairing…';
+        try {
+          await pairCode(cbox.value);
+          toast(`Paired with ${routeName()}`);
+          history.replaceState(null, '', location.pathname + location.search + '#/');
+          route();
+        } catch (e) { cerr.textContent = e.message || String(e); cbtn.textContent = 'Pair'; delete cbtn.dataset.busy; cbtn.disabled = !ready(); }
+      };
+      cbox.addEventListener('input', () => { cbox.value = cbox.value.toUpperCase(); cbtn.disabled = !ready(); cerr.textContent = ''; });
+      cbox.addEventListener('keydown', (e) => { if (e.key === 'Enter') go1(); });
+      cbtn.addEventListener('click', go1);
+    }
 
     async function doPair(raw) {
       if (!btn) return;
@@ -2137,10 +2184,11 @@
   // Usage: the Mac's Usage panel, one hairline row per account
   // ======================================================================================
   function ubar(w, short) {
-    const used = w && w.usedPercent != null ? Math.max(0, Math.min(100, Number(w.usedPercent))) : null;
+    const over = !!(w && w.resetsAt && w.resetsAt <= Date.now()); // (an old reading whose window has already reset: full again)
+    const used = w && w.usedPercent != null ? (over ? 0 : Math.max(0, Math.min(100, Number(w.usedPercent)))) : null;
     const left = used == null ? null : Math.round(100 - used);
     const lvl = left == null ? '' : left <= 0 ? 'zero' : left < 10 ? 'low' : left < 25 ? 'mid' : '';
-    const reset = w && w.resetsAt ? `resets ${until(w.resetsAt)}` : '';
+    const reset = w && w.resetsAt && !over ? `resets ${until(w.resetsAt)}` : '';
     const val = left == null ? 'Not known' : `${left}% left${reset ? ` · ${reset}` : ''}`;
     return `<div class="ubar ${lvl}"><span class="ul">${esc(short || (w && w.label) || '')}</span><span class="track"><i style="transform:scaleX(${left == null ? 0 : left / 100})"></i></span><span class="uv">${esc(val)}</span></div>`;
   }
@@ -2266,6 +2314,7 @@
     let unwatch = () => {};
     let localSub = null;
     let busy = '';
+    let pcode = null; // (a short pair code for another screen: { code, expiresAt })
 
     function notifSection() {
       const h = data.hello;
@@ -2347,6 +2396,10 @@
     }
     function render() {
       body.innerHTML = `${notifSection()}${computersSection()}${connSection()}
+        ${has('paircode') ? `<div class="glabel">Other screens</div>
+        <div class="list">${pcode && pcode.expiresAt > Date.now() ? `<div class="lrow pcoderow"><span class="grow"><span class="pcode">${esc(pcode.code)}</span><small>On the other screen, open <b>nightmewfoxy.github.io/foxymind-phone</b> and type this code. Works once, until ${esc(clock(pcode.expiresAt))}.</small></span></div>` : ''}
+          <button class="lrow btnrow-l" style="width:100%" data-act="paircode">${busy === 'code' ? 'Getting a code…' : pcode ? 'Get a new code' : 'Pair another screen'}</button></div>
+        <p class="gfoot">For your car, a tablet or any browser: type a short code there instead of a link.</p>` : ''}
         <div class="glabel">This phone</div>
         <div class="list"><button class="lrow danger" style="width:100%" data-act="unpair">Unpair this phone</button></div>
         <p class="gfoot">Unpairing removes this phone from FoxyMind. You'll need a new pair link to use it again.</p>
@@ -2406,6 +2459,14 @@
       if (act === 'pcwake') { wakePc(b); return; }
       if (act === 'mvstop') { stopMoving(b); return; }
       if (act === 'push-on') { pushOn(); return; }
+      if (act === 'paircode') {
+        if (busy) return;
+        busy = 'code'; render();
+        try { pcode = await api('POST', '/paircode'); } catch (err) { toast(`Couldn't get a code: ${err.message}`, 'err'); }
+        busy = ''; render();
+        const pr = $('.pcoderow', body); if (pr && pr.scrollIntoView) pr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
       if (act === 'push-test') {
         busy = 'test'; render();
         try { const r = await api('POST', '/push/test'); toast(r && r.sent ? 'Test sent. It should arrive in a moment.' : 'The Mac has no phone to send to. Turn notifications off and on again.', r && r.sent ? '' : 'err'); } catch (err) { toast(`Test failed: ${err.message}`, 'err'); }
