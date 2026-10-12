@@ -369,7 +369,9 @@ details.toolrun .tools { margin: 0 0 4px; border-left: 0; }
 .micbtn.on svg { width: 14px; height: 14px; }
 @keyframes micpulse { 0% { box-shadow: 0 0 0 0 rgba(229,72,77,.55); } 100% { box-shadow: 0 0 0 12px rgba(229,72,77,0); } }
 .micline { display: flex; align-items: center; gap: 9px; margin: 0 12px 8px; padding: 8px 8px 8px 12px; border-radius: 12px; border: 1px solid var(--line-2); font-size: 15px; color: var(--text); }
-.micline .mdot { width: 8px; height: 8px; border-radius: 50%; background: #e5484d; flex: none; animation: mdot 1s ease-in-out infinite alternate; }
+.micline .mdot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); flex: none; animation: mdot .5s ease-in-out infinite alternate; transition: transform .08s linear; }
+.micline.live .mdot { background: #e5484d; animation: none; transform: scale(calc(1 + var(--lvl, 0) * 1.2)); }
+.micline:not(.live) .mtext { color: var(--text-3); }
 @keyframes mdot { to { opacity: .35; } }
 .micline .mtext { flex: 1; min-width: 0; max-height: 66px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; line-height: 1.4; }
 .micline .mcancel { width: 36px; height: 36px; flex: none; display: grid; place-items: center; color: var(--text-3); border-radius: 50%; }
