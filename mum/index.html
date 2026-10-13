@@ -24,7 +24,7 @@
   // Always the newest version: version.json is fetched past every cache, and the page loads the files of that
   // version, so a refresh (or reopening the Home Screen icon) picks up an update at once. Bump version.json on publish.
   (function () {
-    var BAKED = { v: "6", md: "10" };
+    var BAKED = { v: "7", md: "10" };
     function load(ver) {
       window.MUM_VERSION = ver.v;
       var show = function () { document.documentElement.classList.remove("wait"); };

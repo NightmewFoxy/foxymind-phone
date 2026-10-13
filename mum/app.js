@@ -451,7 +451,10 @@
     if (m.role === 'user') {
       // (a chat that got long goes on in a fresh one, which starts with the gist of the old one: shown as a note)
       const carried = /^<接上次的对话>[\s\S]*?<\/接上次的对话>\s*/.exec(m.text);
-      const t = carried ? m.text.slice(carried[0].length) : m.text;
+      let t = carried ? m.text.slice(carried[0].length) : m.text;
+      // (many photos go as a list of their files, lib/family.js: shown as a count)
+      const list = /\s*<她的照片>\n?她发了 (\d+) 张照片[\s\S]*?(<\/她的照片>|$)/.exec(t);
+      if (list) t = `${t.slice(0, list.index)}${t.slice(0, list.index).trim() ? '\n' : ''}[${list[1]} 张照片]${t.slice(list.index + list[0].length)}`;
       return `${carried ? '<div class="carried">📒 上一个对话太长了，小帮手换了一页继续。之前说的话它都记得。</div>' : ''}${t.trim() ? `<div class="msg me">${esc(t.replace(/\[(\d+) images?\]/, '[$1 张照片]'))}</div>` : ''}`;
     }
     if (m.role === 'system') return '';
@@ -470,11 +473,11 @@
     const url = URL.createObjectURL(file);
     try { const img = new Image(); img.src = url; await img.decode(); return img; } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
   }
-  async function shrink(file) {
+  async function shrink(file, side = 2048) {
     try {
       const bmp = await decode(file);
       const w = bmp.width || bmp.naturalWidth; const h = bmp.height || bmp.naturalHeight;
-      const k = Math.min(1, 2048 / Math.max(w, h));
+      const k = Math.min(1, side / Math.max(w, h));
       const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
       c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
       const b = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.86));
@@ -489,7 +492,7 @@
     show(`<header class="top line"><button class="back" data-act="back" aria-label="返回">‹</button><h2 id="ctitle">${s ? esc(s.t) : id ? '对话' : '新对话'}</h2></header>
       <div class="offline-slot" style="padding:0 14px"></div>
       <div class="chat" id="msgs">${id ? '<div class="empty"><span class="spin"></span></div>' : `<div class="msg them"><p>你好！🌷 ${s && s.say ? '我已经帮你在下面写好了一段话。<b>____</b> 的地方请换成你自己的话，然后按 <b>➤</b> 发送。' : '在下面写你要的东西，然后按 <b>➤</b> 发送。也可以按 📷 加照片。'}</p></div>`}</div>
-      <div class="composer"><div class="thumbs" id="thumbs"></div>
+      <div class="composer"><div class="photocount" id="photocount" hidden><span></span><button data-act="rmall">全部拿掉</button></div><div class="thumbs" id="thumbs"></div>
         <div class="heard" id="heard" hidden></div>
         <div class="microw" id="microw"><button class="micbig" data-act="mic"><span class="mdot"></span><span class="mlabel">🎤 按一下，开始说话</span></button><button class="miccancel" data-act="mcancel" hidden>取消</button></div>
         <div class="bar">
@@ -541,16 +544,26 @@
       const pick = $('#pick');
       $('[data-act="photo"]').onclick = () => pick.click();
       // (a photo this phone can't show gets a plain tile instead of a broken picture; a red one couldn't be sent)
+      // (owner 13 Oct 2026: "attach way more than 10 images at once": up to PHOTO_MAX; past 10 the row scrolls sideways
+      // under a count with "全部拿掉", and the computer hands them out to helpers, lib/family.js)
+      const PHOTO_MAX = 100;
       const paintThumbs = () => {
-        $('#thumbs').innerHTML = photos.map((p, i) => `<div class="${p.bad ? 'bad' : ''}">${p.seen ? `<img src="${p.url}" alt="照片 ${i + 1}">` : `<span class="tile">🖼️<small>照片 ${i + 1}</small></span>`}<button data-rm="${i}" aria-label="拿掉照片 ${i + 1}">✕</button></div>`).join('');
+        const th = $('#thumbs');
+        th.classList.toggle('many', photos.length > 6);
+        $('#photocount').hidden = photos.length < 2;
+        $('#photocount span').textContent = `已选 ${photos.length} 张照片`;
+        th.innerHTML = photos.map((p, i) => `<div class="${p.bad ? 'bad' : ''}">${p.seen ? `<img src="${p.url}" alt="照片 ${i + 1}">` : `<span class="tile">🖼️<small>照片 ${i + 1}</small></span>`}<button data-rm="${i}" aria-label="拿掉照片 ${i + 1}">✕</button></div>`).join('');
         $$('[data-rm]').forEach((b) => { b.onclick = () => { const [p] = photos.splice(Number(b.dataset.rm), 1); if (p.url) URL.revokeObjectURL(p.url); paintThumbs(); }; });
       };
       pick.onchange = async () => {
         const files = Array.from(pick.files || []); pick.value = '';
-        if (photos.length + files.length > 10) toast('一次最多10张照片。');
-        for (const f of files.slice(0, Math.max(0, 10 - photos.length))) { const r = await shrink(f); photos.push({ blob: r.blob, seen: r.seen, url: r.seen ? URL.createObjectURL(r.blob) : null }); }
+        if (photos.length + files.length > PHOTO_MAX) toast(`一次最多${PHOTO_MAX}张照片，多出来的没有加进去。`);
+        const take = files.slice(0, Math.max(0, PHOTO_MAX - photos.length));
+        const side = photos.length + take.length > 10 ? 1600 : 2048; // (many: smaller, so they go up quicker)
+        for (const f of take) { const r = await shrink(f, side); photos.push({ blob: r.blob, seen: r.seen, url: r.seen ? URL.createObjectURL(r.blob) : null }); paintThumbs(); }
         paintThumbs();
       };
+      $('[data-act="rmall"]').onclick = () => { photos.splice(0).forEach((p) => p.url && URL.revokeObjectURL(p.url)); paintThumbs(); };
       if (s && s.photo) setTimeout(() => pick.click(), 300);
       // ----- the mic: tap, speak, tap again; the words go into the box where the cursor is (over the ____ when that is
       // what's picked), she looks them over and presses ➤. Pieces go to the computer while she speaks; if any of them
@@ -649,18 +662,32 @@
             chatId = r.id; history.replaceState(null, '', `#/c/${encodeURIComponent(chatId)}`);
             if (starter === 'ready') { delete store['draft:new']; delete store['draft:newphoto']; save(); }
           }
-          const ids = [];
-          for (const [i, p] of photos.entries()) {
-            if (p.id && p.chat === chatId) { ids.push(p.id); continue; } // (went up on an earlier try)
-            try {
-              const r = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/photo`, undefined, { raw: p.blob, type: /^image\/(jpeg|png|gif|webp)$/.test(p.blob.type) ? p.blob.type : (p.blob.type || 'application/octet-stream'), timeout: 180000 });
-              p.id = r.photoId; p.chat = chatId; p.bad = false; ids.push(r.photoId);
-            } catch (e) {
-              if (e.offline) throw e;
-              p.bad = true; paintThumbs();
-              throw new Error(e.status === 413 ? `第${i + 1}张照片太大了，请按它上面的 ✕ 拿掉，再按 ➤ 发送。` : `第${i + 1}张照片打不开（红色那张），请按它上面的 ✕ 拿掉，再按 ➤ 发送。`);
+          // (three at a time, with a count; one that went up on an earlier try isn't sent again)
+          let upDone = photos.filter((p) => p.id && p.chat === chatId).length; let offline = null; const bad = []; const big = [];
+          const label = () => { if (photos.length > 1) { $('#photocount').hidden = false; $('#photocount span').textContent = `正在传照片 ${upDone}/${photos.length}…`; } };
+          label();
+          const todo = photos.map((p, i) => [p, i]).filter(([p]) => !(p.id && p.chat === chatId));
+          const worker = async () => {
+            for (let job; !offline && (job = todo.shift());) {
+              const [p, i] = job;
+              try {
+                const r = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/photo`, undefined, { raw: p.blob, type: /^image\/(jpeg|png|gif|webp)$/.test(p.blob.type) ? p.blob.type : (p.blob.type || 'application/octet-stream'), timeout: 180000 });
+                p.id = r.photoId; p.chat = chatId; p.bad = false; upDone++; label();
+              } catch (e) {
+                if (e.offline) { offline = e; break; }
+                p.bad = true; (e.status === 413 ? big : bad).push(i + 1);
+              }
             }
+          };
+          await Promise.all([worker(), worker(), worker()]);
+          if (offline) { paintThumbs(); throw offline; }
+          if (bad.length || big.length) {
+            paintThumbs();
+            const red = $('#thumbs .bad'); if (red) red.scrollIntoView({ inline: 'center', block: 'nearest' });
+            const n = (a) => a.sort((x, y) => x - y).map((x) => `第${x}张`).join('、');
+            throw new Error(`${big.length ? `${n(big)}照片太大了。` : ''}${bad.length ? `${n(bad)}照片打不开。` : ''}红色的那些请按 ✕ 拿掉，再按 ➤ 发送（别的照片已经传好了）。`);
           }
+          const ids = photos.map((p) => p.id);
           const sent = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/send`, { text: text || '这是照片。', photos: ids }, { timeout: 60000 });
           if (sent && sent.movedTo) { chatId = sent.movedTo; history.replaceState(null, '', `#/c/${encodeURIComponent(chatId)}`); msgs = []; known = null; }
           pending.push({ text: (text || '') + (ids.length ? `${text ? '\n' : ''}[${ids.length} 张照片]` : ''), base: msgs.filter((m) => m.role === 'user').length });

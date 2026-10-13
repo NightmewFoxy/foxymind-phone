@@ -75,6 +75,11 @@ a { color: var(--accent); }
 
 .composer { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px); }
 .composer .thumbs { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.composer .thumbs.many { flex-wrap: nowrap; overflow-x: auto; padding-top: 10px; margin-top: -10px; -webkit-overflow-scrolling: touch; }
+.composer .thumbs.many > div { flex: none; }
+.composer .photocount { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 17px; color: var(--soft); }
+.composer .photocount[hidden] { display: none; }
+.composer .photocount button { border: 1px solid var(--line); background: var(--card, #fff); color: var(--ink); border-radius: 999px; padding: 8px 14px; font-size: 16px; }
 .composer .thumbs div { position: relative; }
 .composer .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 .composer .thumbs .tile { width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--line); background: var(--accent-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 24px; line-height: 1.1; }
