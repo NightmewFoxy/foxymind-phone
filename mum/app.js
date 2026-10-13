@@ -19,6 +19,93 @@
   const NTFY = 'https://ntfy.sh';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+  // ---------- the mic (owner 13 Oct 2026: her Android had no mic button). The same sound path as his phone app
+  // (phone/www/app.js v10: 16 kHz, filtered resampling, AudioWorklet, kept open 30 s so the next tap records at once);
+  // the words come from Grok on the computer (lib/family.js /mic, lib/phonemic.js), Mandarin as it is said.
+  const MIC_TAIL_MS = 1000; // (the mic keeps listening up to this long after the stop tap: browsers hand sound over late)
+  const MIC_QUIET_MS = 300; // (… but stops once this much quiet has come in after the tap: the last word is in)
+  const MIC_PAD_MS = 300; // (silence added after the last word, so Grok hears the sentence end)
+  const MIC_PREROLL_MS = 300; // (a mic still open from the last recording keeps this much from just before the tap)
+  const MIC_KEEP_MS = 30000; // (the mic stays open this long after a stop: the next tap records at once)
+  const MIC_WORKLET = "registerProcessor('fm-mic',class extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(1024);this.n=0}process(i){const c=i[0]&&i[0][0];if(c)for(let k=0;k<c.length;k++){this.b[this.n++]=c[k];if(this.n===1024){this.port.postMessage(this.b,[this.b.buffer]);this.b=new Float32Array(1024);this.n=0}}return true}})";
+  let mic = null; // { ctx, stream, src, node, sink, rate, ring, ringLen, onPcm, floor, flowing, letGo, dead }
+  function micResampler(rate) { // (→ 16 kHz: low-pass below 7.4 kHz, then steps of rate/16000; carries over between pieces)
+    if (Math.abs(rate - 16000) < 1) return (f) => f;
+    const ratio = rate / 16000; const M = Math.ceil(ratio * 8); const N = 2 * M + 1; const fc = 7400 / rate;
+    const h = new Float32Array(N); let s = 0;
+    for (let k = 0; k < N; k++) {
+      const x = k - M; const sinc = x === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * x) / (Math.PI * x);
+      h[k] = sinc * (0.42 - 0.5 * Math.cos(2 * Math.PI * k / (N - 1)) + 0.08 * Math.cos(4 * Math.PI * k / (N - 1))); s += h[k];
+    }
+    for (let k = 0; k < N; k++) h[k] /= s;
+    let hist = new Float32Array(N - 1); let last = 0; let pos = 1;
+    return (x) => {
+      const m = x.length; const buf = new Float32Array(N - 1 + m); buf.set(hist); buf.set(x, N - 1);
+      const y = new Float32Array(m + 1); y[0] = last;
+      for (let j = 0; j < m; j++) { let a = 0; for (let k = 0; k < N; k++) a += h[k] * buf[j + k]; y[j + 1] = a; }
+      const out = []; while (pos < m) { const i = Math.floor(pos); out.push(y[i] + (y[i + 1] - y[i]) * (pos - i)); pos += ratio; }
+      pos -= m; last = y[m]; hist = buf.slice(m);
+      return Float32Array.from(out);
+    };
+  }
+  async function micOpen() {
+    if (mic && !mic.dead) { clearTimeout(mic.letGo); if (mic.ctx.state !== 'running') await mic.ctx.resume().catch(() => {}); return mic; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('这个浏览器不能录音。');
+    let ctx; try { ctx = new AC({ sampleRate: 16000 }); } catch (e) { ctx = new AC(); } // (made in the tap itself: iOS wants that)
+    const m = mic = { ctx, ring: [], ringLen: 0, onPcm: null, floor: null, flowing: false, dead: false };
+    try {
+      const resumed = ctx.resume().catch(() => {});
+      m.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      await resumed;
+      let src; try { src = ctx.createMediaStreamSource(m.stream); } catch (e) { // (a browser that only records at the mic's own rate)
+        try { ctx.close(); } catch (e2) {}
+        ctx = m.ctx = new AC(); await ctx.resume().catch(() => {}); src = ctx.createMediaStreamSource(m.stream);
+      }
+      m.rate = ctx.sampleRate; const rs = micResampler(m.rate);
+      const onSound = (f) => {
+        if (m.dead) return;
+        const sec = f.length / m.rate; let sq = 0; for (let i = 0; i < f.length; i++) sq += f[i] * f[i];
+        const rms = Math.sqrt(sq / (f.length || 1));
+        m.floor = Math.min(m.floor == null ? 1 : m.floor * (1 + 0.25 * sec) + 0.002 * sec, rms); // (the room's quiet level, drifting up slowly)
+        const g = rs(f); const pcm = new Int16Array(g.length);
+        for (let i = 0; i < g.length; i++) pcm[i] = Math.max(-1, Math.min(1, g[i])) * 0x7fff;
+        if (!pcm.length) return;
+        m.flowing = true;
+        if (m.onPcm) { m.onPcm(pcm, rms, sec); return; }
+        m.ring.push(pcm); m.ringLen += pcm.length; // (nobody recording: keep only the last MIC_PREROLL_MS)
+        while (m.ring.length > 1 && m.ringLen - m.ring[0].length >= 16 * MIC_PREROLL_MS) m.ringLen -= m.ring.shift().length;
+      };
+      const sink = ctx.createGain(); sink.gain.value = 0; sink.connect(ctx.destination); // (pulls the sound through, plays nothing)
+      let node = null;
+      if (ctx.audioWorklet && window.AudioWorkletNode) {
+        try {
+          const url = URL.createObjectURL(new Blob([MIC_WORKLET], { type: 'application/javascript' }));
+          try { await ctx.audioWorklet.addModule(url); } finally { URL.revokeObjectURL(url); }
+          node = new AudioWorkletNode(ctx, 'fm-mic', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
+          node.port.onmessage = (e) => onSound(e.data);
+        } catch (e) { node = null; }
+      }
+      if (!node) { node = ctx.createScriptProcessor(2048, 1, 1); node.onaudioprocess = (e) => onSound(new Float32Array(e.inputBuffer.getChannelData(0))); }
+      src.connect(node); node.connect(sink);
+      Object.assign(m, { src, node, sink });
+      m.stream.getTracks().forEach((t) => t.addEventListener('ended', () => micRelease(m)));
+      m.listen = (fn) => { m.onPcm = fn; };
+      m.preroll = () => { const p = m.ring.splice(0); m.ringLen = 0; return p; };
+      if (m.dead) throw new Error('stopped');
+      return m;
+    } catch (e) { micRelease(m); throw e; }
+  }
+  function micLetGo() { const m = mic; if (!m) return; m.onPcm = null; clearTimeout(m.letGo); m.letGo = setTimeout(() => micRelease(m), MIC_KEEP_MS); }
+  function micRelease(m) {
+    if (!m || m.dead) return; m.dead = true; if (mic === m) mic = null;
+    clearTimeout(m.letGo); m.onPcm = null;
+    try { if (m.node) { m.node.disconnect(); if (m.node.port) m.node.port.onmessage = null; } } catch (e) {}
+    try { if (m.stream) m.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+    try { m.ctx.close(); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && mic && !mic.onPcm) micRelease(mic); }); // (never open in the background)
+
   let toastTimer = null;
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 3500); }
 
@@ -402,7 +489,10 @@
     show(`<header class="top line"><button class="back" data-act="back" aria-label="返回">‹</button><h2 id="ctitle">${s ? esc(s.t) : id ? '对话' : '新对话'}</h2></header>
       <div class="offline-slot" style="padding:0 14px"></div>
       <div class="chat" id="msgs">${id ? '<div class="empty"><span class="spin"></span></div>' : `<div class="msg them"><p>你好！🌷 ${s && s.say ? '我已经帮你在下面写好了一段话。<b>____</b> 的地方请换成你自己的话，然后按 <b>➤</b> 发送。' : '在下面写你要的东西，然后按 <b>➤</b> 发送。也可以按 📷 加照片。'}</p></div>`}</div>
-      <div class="composer"><div class="thumbs" id="thumbs"></div><div class="bar">
+      <div class="composer"><div class="thumbs" id="thumbs"></div>
+        <div class="heard" id="heard" hidden></div>
+        <div class="microw" id="microw"><button class="micbig" data-act="mic"><span class="mdot"></span><span class="mlabel">🎤 按一下，开始说话</span></button><button class="miccancel" data-act="mcancel" hidden>取消</button></div>
+        <div class="bar">
         <button class="iconbtn" data-act="photo" aria-label="加照片">📷</button>
         <textarea id="box" rows="1" placeholder="在这里写…" aria-label="你的信息"></textarea>
         <button class="sendbtn" data-act="send" aria-label="发送">➤</button></div>
@@ -462,7 +552,94 @@
         paintThumbs();
       };
       if (s && s.photo) setTimeout(() => pick.click(), 300);
+      // ----- the mic: tap, speak, tap again; the words go into the box where the cursor is (over the ____ when that is
+      // what's picked), she looks them over and presses ➤. Pieces go to the computer while she speaks; if any of them
+      // is lost on the way, the whole recording goes once at the end (/mic/once), so nothing she said is lost.
+      const micBtn = $('[data-act="mic"]'); const micCancel = $('[data-act="mcancel"]'); const heardEl = $('#heard');
+      const canMic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext));
+      if (!canMic) $('#microw').hidden = true;
+      let rec = null; let micWriting = null;
+      const joinPcm = (parts) => { const n = parts.reduce((a, p) => a + p.length, 0); const o = new Int16Array(n); let k = 0; for (const p of parts) { o.set(p, k); k += p.length; } return o; };
+      const paintMic = (mode) => { // idle | starting | live | writing
+        micBtn.className = `micbig ${mode}`; micBtn.disabled = mode === 'writing';
+        $('.mlabel', micBtn).textContent = { idle: '🎤 按一下，开始说话', starting: '正在打开麦克风…', live: '说完了，按这里', writing: '正在写下来…' }[mode];
+        micCancel.hidden = mode !== 'live' && mode !== 'starting';
+        if (mode === 'idle' || mode === 'writing') heardEl.hidden = true;
+      };
+      const micDrop = (r) => { if (r.id) api('DELETE', `/family/mic/${r.id}`).catch(() => {}); };
+      const micOff = (r) => { r.closed = true; clearInterval(r.tick); micLetGo(); };
+      const pump = async (r) => {
+        if (r.lost || !r.id || !r.queue.length) return;
+        const seq = r.seq++; const pcm = joinPcm(r.queue.splice(0));
+        try {
+          const x = await api('POST', `/family/mic/${r.id}/audio?seq=${seq}`, undefined, { raw: new Blob([pcm.buffer]), timeout: 20000 });
+          if (rec === r && x && x.text && seq >= (r.shown || 0)) { r.shown = seq; r.heard = x.text; heardEl.textContent = x.text; heardEl.hidden = false; }
+        } catch (e) { r.lost = true; }
+      };
+      const micFail = (r, e) => {
+        if (rec !== r) return; rec = null; micOff(r); micDrop(r); paintMic('idle');
+        toast(e && e.name === 'NotAllowedError' ? '麦克风被关掉了。请在弹出来的问题里按“允许”，或者在浏览器设置里打开麦克风，再试一次。' : e && e.offline ? '现在连不上电脑，请等一下再试。' : '麦克风打不开，请再试一次。');
+      };
+      async function micStart() {
+        const r = { id: null, queue: [], all: [], seq: 0 };
+        rec = r; heardEl.textContent = '正在听，请说话…'; heardEl.hidden = true; paintMic('starting');
+        r.started = api('POST', '/family/mic', {}).then((x) => { r.id = x.id; if (r.closed && !r.stopping) micDrop(r); }, () => { r.lost = true; });
+        try {
+          const m = await micOpen(); // (in the tap itself: phones want that)
+          if (rec !== r) return;
+          for (const pcm of m.preroll()) { r.queue.push(pcm); r.all.push(pcm); }
+          const live = () => { if (!r.live && rec === r) { r.live = true; paintMic('live'); heardEl.hidden = false; } };
+          m.listen((pcm, rms, sec) => {
+            if (r.closed) return;
+            r.queue.push(pcm); r.all.push(pcm); live();
+            micBtn.style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
+            if (r.tail) r.tail(rms, sec, m.floor);
+          });
+          if (m.flowing) live();
+          r.tick = setInterval(() => pump(r), 250);
+        } catch (e) { micFail(r, e); }
+      }
+      async function micStop() {
+        const r = rec; if (!r) return;
+        rec = null; r.stopping = true;
+        if (!r.live) { micOff(r); micDrop(r); paintMic('idle'); return; }
+        paintMic('writing');
+        let written; const writing = micWriting = new Promise((ok) => { written = ok; });
+        const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
+        const before = box.value.slice(0, a); const after = box.value.slice(b);
+        try {
+          await new Promise((done) => { // (the last word is still on its way: listen until a moment of quiet)
+            let quiet = 0;
+            r.tail = (rms, sec, floor) => { quiet = rms < Math.max(0.004, (floor || 0) * 3) ? quiet + sec * 1000 : 0; if (quiet >= MIC_QUIET_MS) done(); };
+            setTimeout(done, MIC_TAIL_MS);
+          });
+          micOff(r);
+          const pad = new Int16Array(16 * MIC_PAD_MS); r.queue.push(pad); r.all.push(pad);
+          if (!r.id && !r.lost) await r.started;
+          let x = null;
+          if (!r.lost && r.id) {
+            try { x = await api('POST', `/family/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([joinPcm(r.queue.splice(0)).buffer]), timeout: 30000 }); } catch (e) { if (e.offline) throw e; r.lost = true; }
+          }
+          if (r.lost) { micDrop(r); x = await api('POST', '/family/mic/once', undefined, { raw: new Blob([joinPcm(r.all).buffer]), timeout: 120000 }); }
+          const t = String((x && x.text) || '').trim();
+          if (!t) { toast('没有听到说话，请靠近一点再说一次。'); return; }
+          box.value = before + t + after; grow();
+          const c = (before + t).length; try { box.setSelectionRange(c, c); } catch (e) { /* */ }
+          if (draftKey) { store[draftKey] = box.value; save(); }
+          box.classList.add('justheard'); setTimeout(() => box.classList.remove('justheard'), 2500); // (the box glows: look it over, then ➤)
+        } catch (e) { toast(e.offline ? '现在连不上电脑，刚才说的话没有写下来。请等一下再试。' : '没有写下来，请再说一次。'); }
+        finally { paintMic('idle'); if (micWriting === writing) micWriting = null; written(); }
+      }
+      micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (the keyboard stays as it is)
+      micBtn.onclick = () => { if (rec) micStop(); else micStart(); };
+      micCancel.onclick = () => { const r = rec; if (!r) return; rec = null; micOff(r); micDrop(r); paintMic('idle'); };
+      // (a Grok mic kept ready on the computer while this chat is open: no wait after the tap)
+      const micWarm = () => { if (canMic && !document.hidden) api('POST', '/family/mic/warm', {}).catch(() => {}); };
+      const warmTick = setInterval(micWarm, 35000); setTimeout(micWarm, 500);
+
       const send = async () => {
+        if (rec) await micStop(); // (pressing ➤ while it listens: the words go in, then it sends)
+        if (micWriting) await micWriting;
         const text = box.value.replace(/____/g, '').trim();
         if (busy || (!text && !photos.length)) { if (!busy) toast('请先写点东西 🙂'); return; }
         busy = true; const btn = $('[data-act="send"]'); btn.disabled = true;
@@ -494,7 +671,7 @@
         busy = false; btn.disabled = false;
       };
       $('[data-act="send"]').onclick = send;
-      return () => { photos.forEach((p) => URL.revokeObjectURL(p.url)); };
+      return () => { photos.forEach((p) => p.url && URL.revokeObjectURL(p.url)); clearInterval(warmTick); if (rec) { const r = rec; rec = null; micOff(r); micDrop(r); } };
     });
   }
 

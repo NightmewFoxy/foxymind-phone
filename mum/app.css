@@ -140,3 +140,19 @@ a { color: var(--accent); }
 .cap.limits { background: #fff8ec; border-color: #f1d3a1; }
 .seeall { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 2px solid #f0c6b1; background: var(--accent-soft); border-radius: var(--radius); padding: 14px 16px; margin: 0 0 18px; }
 .seeall .e { font-size: 30px; } .seeall b { display: block; } .seeall span { color: var(--soft); font-size: 16px; }
+
+/* the mic (13 Oct 2026): one big button over the box; red with a pulsing dot while it listens */
+.microw { display: flex; gap: 8px; margin-bottom: 10px; }
+.micbig { flex: 1; min-height: 58px; border-radius: 999px; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-size: 20px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px; -webkit-tap-highlight-color: transparent; }
+.micbig:active { transform: scale(.98); }
+.micbig .mdot { display: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; flex: none; }
+.micbig.starting { opacity: .8; }
+.micbig.live { background: #c62828; border-color: #c62828; color: #fff; }
+.micbig.live .mdot { display: block; transform: scale(calc(1 + var(--lvl, 0) * .8)); animation: mpulse 1.2s ease-in-out infinite; }
+.micbig.writing { background: var(--card); border-color: var(--line); color: var(--soft); }
+.miccancel { flex: none; min-height: 58px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); padding: 0 18px; font-size: 18px; }
+.heard { background: var(--card); border: 1px dashed var(--accent); border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; font-size: 19px; line-height: 1.45; max-height: 30vh; overflow: auto; }
+@keyframes mpulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .micbig.live .mdot { animation: none; } }
+.micbig .mlabel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer textarea.justheard { border-color: var(--ok); box-shadow: 0 0 0 4px rgba(47,125,79,.18); transition: box-shadow .3s; }
