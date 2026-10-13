@@ -361,7 +361,12 @@
   }
   const STEP = { Write: '📝 存好了', Edit: '📝 改好了', MultiEdit: '📝 改好了', Read: '📖 正在看', WebSearch: '🔎 上网查一查', WebFetch: '🌐 正在看网页', Glob: '🗂️ 找一找你的东西', Grep: '🗂️ 找一找你的东西', TodoWrite: '🗒️ 想一想步骤' };
   function renderMsg(m) {
-    if (m.role === 'user') return `<div class="msg me">${esc(m.text.replace(/\[(\d+) images?\]/, '[$1 张照片]'))}</div>`;
+    if (m.role === 'user') {
+      // (a chat that got long goes on in a fresh one, which starts with the gist of the old one: shown as a note)
+      const carried = /^<接上次的对话>[\s\S]*?<\/接上次的对话>\s*/.exec(m.text);
+      const t = carried ? m.text.slice(carried[0].length) : m.text;
+      return `${carried ? '<div class="carried">📒 上一个对话太长了，小帮手换了一页继续。之前说的话它都记得。</div>' : ''}${t.trim() ? `<div class="msg me">${esc(t.replace(/\[(\d+) images?\]/, '[$1 张照片]'))}</div>` : ''}`;
+    }
     if (m.role === 'system') return '';
     let html = ''; let step = '';
     for (const p of m.parts || []) {
@@ -444,13 +449,14 @@
         busy = true; const btn = $('[data-act="send"]'); btn.disabled = true;
         try {
           if (!chatId) {
-            const r = await api('POST', '/family/chats/new', {}, { timeout: 60000 });
+            const r = await api('POST', '/family/chats/new', { text, photo: photos.length > 0 }, { timeout: 60000 });
             chatId = r.id; history.replaceState(null, '', `#/c/${encodeURIComponent(chatId)}`);
             if (starter === 'ready') { delete store['draft:new']; delete store['draft:newphoto']; save(); }
           }
           const ids = [];
           for (const p of photos) { const r = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/photo`, undefined, { raw: p.blob, type: p.blob.type || 'image/jpeg', timeout: 120000 }); ids.push(r.photoId); }
-          await api('POST', `/family/chats/${encodeURIComponent(chatId)}/send`, { text: text || '这是照片。', photos: ids }, { timeout: 30000 });
+          const sent = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/send`, { text: text || '这是照片。', photos: ids }, { timeout: 60000 });
+          if (sent && sent.movedTo) { chatId = sent.movedTo; history.replaceState(null, '', `#/c/${encodeURIComponent(chatId)}`); msgs = []; known = null; }
           pending.push({ text: (text || '') + (ids.length ? `${text ? '\n' : ''}[${ids.length} 张照片]` : ''), base: msgs.filter((m) => m.role === 'user').length });
           photos.splice(0).forEach((p) => URL.revokeObjectURL(p.url)); paintThumbs();
           box.value = ''; grow(); if (draftKey) { delete store[draftKey]; save(); }

@@ -62,7 +62,8 @@ a { color: var(--accent); }
 .msg pre { white-space: pre-wrap; font-size: 15px; background: #f6f1ea; padding: 8px; border-radius: 8px; }
 .msg code { font-size: .9em; background: #f6f1ea; padding: 1px 4px; border-radius: 4px; }
 .step { font-size: 15px; color: var(--soft); margin: 6px 0 0; }
-.thinking { align-self: flex-start; color: var(--soft); display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
+.carried { align-self: center; text-align: center; color: var(--soft); font-size: 17px; background: var(--card, #fff); border: 1px dashed #e6d9cc; border-radius: 14px; padding: 10px 14px; max-width: 92%; }
+.thinking {align-self: flex-start; color: var(--soft); display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
 .thinking i { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); animation: pulse 1s infinite; }
 .thinking i:nth-child(2) { animation-delay: .2s; } .thinking i:nth-child(3) { animation-delay: .4s; }
 .ask { align-self: stretch; background: var(--accent-soft); border: 2px solid #f0c6b1; border-radius: var(--radius); padding: 14px; }
