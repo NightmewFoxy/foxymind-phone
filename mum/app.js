@@ -450,11 +450,13 @@
   function renderMsg(m) {
     if (m.role === 'user') {
       // (a chat that got long goes on in a fresh one, which starts with the gist of the old one: shown as a note)
-      const carried = /^<接上次的对话>[\s\S]*?<\/接上次的对话>\s*/.exec(m.text);
-      let t = carried ? m.text.slice(carried[0].length) : m.text;
+      // (Claude Code wraps a long paste in <pasted_content id="…"> tags: not hers to see)
+      const raw = String(m.text || '').replace(/<\/?pasted_content[^>]*>\n?/g, '').trim();
+      const carried = /^<接上次的对话>[\s\S]*?<\/接上次的对话>\s*/.exec(raw);
+      let t = carried ? raw.slice(carried[0].length) : raw;
       // (many photos go as a list of their files, lib/family.js: shown as a count)
       const list = /\s*<她的照片>\n?她发了 (\d+) 张照片[\s\S]*?(<\/她的照片>|$)/.exec(t);
-      if (list) t = `${t.slice(0, list.index)}${t.slice(0, list.index).trim() ? '\n' : ''}[${list[1]} 张照片]${t.slice(list.index + list[0].length)}`;
+      if (list) t = `${t.slice(0, list.index)}${t.slice(0, list.index).trim() ? '\n' : ''}[${list[1]} 张照片]${t.slice(list.index + list[0].length).replace(/\s*\[\d+ images?\]/, '')}`;
       return `${carried ? '<div class="carried">📒 上一个对话太长了，小帮手换了一页继续。之前说的话它都记得。</div>' : ''}${t.trim() ? `<div class="msg me">${esc(t.replace(/\[(\d+) images?\]/, '[$1 张照片]'))}</div>` : ''}`;
     }
     if (m.role === 'system') return '';
