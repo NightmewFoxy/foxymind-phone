@@ -77,6 +77,9 @@ a { color: var(--accent); }
 .composer .thumbs { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .composer .thumbs div { position: relative; }
 .composer .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.composer .thumbs .tile { width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--line); background: var(--accent-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 24px; line-height: 1.1; }
+.composer .thumbs .tile small { font-size: 12px; color: var(--soft); }
+.composer .thumbs .bad img, .composer .thumbs .bad .tile { outline: 3px solid #c62828; outline-offset: -3px; }
 .composer .thumbs button { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: var(--ink); color: #fff; font-size: 15px; }
 .composer .bar { display: flex; align-items: flex-end; gap: 8px; }
 .composer textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 22px; padding: 12px 16px; min-height: 52px; max-height: 40vh; background: var(--card); outline: none; }

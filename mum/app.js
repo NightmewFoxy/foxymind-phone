@@ -376,14 +376,24 @@
     if (step) html += `<p class="step">${esc(step)}</p>`;
     return html ? `<div class="msg them">${html}</div>` : '';
   }
-  async function shrink(file) { // ≤2048 px JPEG (a phone photo is 3-5 MB)
+  // ≤2048 px JPEG (a phone photo is 3-5 MB). A photo this browser can't open (a Samsung's HEIC, owner 13 Oct 2026:
+  // it showed broken and nothing sent) goes as it is: the computer makes it a JPEG (lib/family.js toJpeg).
+  async function decode(file) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { /* try an <img> */ }
+    const url = URL.createObjectURL(file);
+    try { const img = new Image(); img.src = url; await img.decode(); return img; } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  }
+  async function shrink(file) {
     try {
-      const bmp = await createImageBitmap(file);
-      const k = Math.min(1, 2048 / Math.max(bmp.width, bmp.height));
-      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      const bmp = await decode(file);
+      const w = bmp.width || bmp.naturalWidth; const h = bmp.height || bmp.naturalHeight;
+      const k = Math.min(1, 2048 / Math.max(w, h));
+      const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
       c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-      return await new Promise((ok) => c.toBlob((b) => ok(b || file), 'image/jpeg', 0.86));
-    } catch (e) { return file; }
+      const b = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.86));
+      if (b && b.size > 0) return { blob: b, seen: true };
+    } catch (e) { /* as it is */ }
+    return { blob: file, seen: false };
   }
   function ChatView(id, starter) {
     let s = STARTERS.find((x) => x.id === starter);
@@ -440,8 +450,17 @@
       $('[data-act="back"]').onclick = () => go('#/');
       const pick = $('#pick');
       $('[data-act="photo"]').onclick = () => pick.click();
-      const paintThumbs = () => { $('#thumbs').innerHTML = photos.map((p, i) => `<div><img src="${p.url}" alt="照片 ${i + 1}"><button data-rm="${i}" aria-label="拿掉照片">✕</button></div>`).join(''); $$('[data-rm]').forEach((b) => { b.onclick = () => { const [p] = photos.splice(Number(b.dataset.rm), 1); URL.revokeObjectURL(p.url); paintThumbs(); }; }); };
-      pick.onchange = async () => { for (const f of Array.from(pick.files || []).slice(0, 6)) { const b = await shrink(f); photos.push({ blob: b, url: URL.createObjectURL(b) }); } pick.value = ''; paintThumbs(); };
+      // (a photo this phone can't show gets a plain tile instead of a broken picture; a red one couldn't be sent)
+      const paintThumbs = () => {
+        $('#thumbs').innerHTML = photos.map((p, i) => `<div class="${p.bad ? 'bad' : ''}">${p.seen ? `<img src="${p.url}" alt="照片 ${i + 1}">` : `<span class="tile">🖼️<small>照片 ${i + 1}</small></span>`}<button data-rm="${i}" aria-label="拿掉照片 ${i + 1}">✕</button></div>`).join('');
+        $$('[data-rm]').forEach((b) => { b.onclick = () => { const [p] = photos.splice(Number(b.dataset.rm), 1); if (p.url) URL.revokeObjectURL(p.url); paintThumbs(); }; });
+      };
+      pick.onchange = async () => {
+        const files = Array.from(pick.files || []); pick.value = '';
+        if (photos.length + files.length > 10) toast('一次最多10张照片。');
+        for (const f of files.slice(0, Math.max(0, 10 - photos.length))) { const r = await shrink(f); photos.push({ blob: r.blob, seen: r.seen, url: r.seen ? URL.createObjectURL(r.blob) : null }); }
+        paintThumbs();
+      };
       if (s && s.photo) setTimeout(() => pick.click(), 300);
       const send = async () => {
         const text = box.value.replace(/____/g, '').trim();
@@ -454,7 +473,17 @@
             if (starter === 'ready') { delete store['draft:new']; delete store['draft:newphoto']; save(); }
           }
           const ids = [];
-          for (const p of photos) { const r = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/photo`, undefined, { raw: p.blob, type: p.blob.type || 'image/jpeg', timeout: 120000 }); ids.push(r.photoId); }
+          for (const [i, p] of photos.entries()) {
+            if (p.id && p.chat === chatId) { ids.push(p.id); continue; } // (went up on an earlier try)
+            try {
+              const r = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/photo`, undefined, { raw: p.blob, type: /^image\/(jpeg|png|gif|webp)$/.test(p.blob.type) ? p.blob.type : (p.blob.type || 'application/octet-stream'), timeout: 180000 });
+              p.id = r.photoId; p.chat = chatId; p.bad = false; ids.push(r.photoId);
+            } catch (e) {
+              if (e.offline) throw e;
+              p.bad = true; paintThumbs();
+              throw new Error(e.status === 413 ? `第${i + 1}张照片太大了，请按它上面的 ✕ 拿掉，再按 ➤ 发送。` : `第${i + 1}张照片打不开（红色那张），请按它上面的 ✕ 拿掉，再按 ➤ 发送。`);
+            }
+          }
           const sent = await api('POST', `/family/chats/${encodeURIComponent(chatId)}/send`, { text: text || '这是照片。', photos: ids }, { timeout: 60000 });
           if (sent && sent.movedTo) { chatId = sent.movedTo; history.replaceState(null, '', `#/c/${encodeURIComponent(chatId)}`); msgs = []; known = null; }
           pending.push({ text: (text || '') + (ids.length ? `${text ? '\n' : ''}[${ids.length} 张照片]` : ''), base: msgs.filter((m) => m.role === 'user').length });
