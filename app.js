@@ -1473,8 +1473,19 @@
       hint.innerHTML = ht ? `<i></i>${esc(ht)}` : '';
       paintModel();
     }
+    // This window was closed after handing over to a fresh one (its context filled up): carry on in that one, with
+    // what's typed in the box (owner 13 Oct 2026: "Not sent: Windows: pane not found")
+    let followed = false;
+    function follow(to) {
+      if (followed || !to || to === id) return;
+      followed = true;
+      if (box.value.trim()) lsSet(`draft.${to}`, box.value);
+      toast('It moved on to a fresh window. Carrying on there.');
+      navDir = 'fade'; location.replace(`#/s/${encodeURIComponent(to)}`);
+    }
     function onSessions() {
       const s = (data.sessions || []).find((x) => x.id === id) || null;
+      if (!s && data.sessions) { const nx = data.sessions.find((x) => x.from === id); if (nx) { follow(nx.id); return; } }
       const was = meta;
       meta = s || (Date.now() - openedAt < 20000 ? meta : null);
       paintHeader();
@@ -1916,6 +1927,7 @@
       try {
         const r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...(photos.length ? { photos } : {}) });
         p.status = r && r.queued ? 'queued' : 'sent';
+        if (r && r.movedTo) { follow(r.movedTo); return; }
         if (tab === 'screen') toast(p.status === 'queued' ? 'Will send when it\'s ready' : 'Sent');
         if (tab === 'chat') renderChat();
         setTimeout(() => { if (sessionsLoop) sessionsLoop.kick(); if (chatLoop) chatLoop.kick(); if (screenLoop) screenLoop.kick(); }, 700);
