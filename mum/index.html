@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="wait">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,13 +14,29 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
-  <link rel="stylesheet" href="app.css?v=4">
+  <style>html.wait body{background:#fbf7f1}html.wait #app{visibility:hidden}</style>
 </head>
 <body>
   <div id="app"></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <noscript><p style="padding:40px 20px;font:20px system-ui,sans-serif">请打开 JavaScript 才能使用这个页面。</p></noscript>
-  <script src="../md.js?v=10"></script>
-  <script src="app.js?v=4"></script>
+  <script>
+  // Always the newest version: version.json is fetched past every cache, and the page loads the files of that
+  // version, so a refresh (or reopening the Home Screen icon) picks up an update at once. Bump version.json on publish.
+  (function () {
+    var BAKED = { v: "5", md: "10" };
+    function load(ver) {
+      window.MUM_VERSION = ver.v;
+      var show = function () { document.documentElement.classList.remove("wait"); };
+      var l = document.createElement("link"); l.rel = "stylesheet"; l.href = "app.css?v=" + ver.v; l.onload = l.onerror = show; document.head.appendChild(l);
+      setTimeout(show, 3000);
+      var a = document.createElement("script"); a.src = "../md.js?v=" + (ver.md || BAKED.md); a.async = false; document.body.appendChild(a);
+      var b = document.createElement("script"); b.src = "app.js?v=" + ver.v; b.async = false; document.body.appendChild(b);
+    }
+    var done = false, go = function (ver) { if (!done) { done = true; load(ver && ver.v ? ver : BAKED); } };
+    setTimeout(function () { go(BAKED); }, 4000);
+    fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(go, function () { go(BAKED); });
+  })();
+  </script>
 </body>
 </html>

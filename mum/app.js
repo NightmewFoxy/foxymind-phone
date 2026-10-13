@@ -620,6 +620,23 @@
     });
   }
 
+  // Updates arrive by themselves: when she comes back to the page (or every 15 minutes) a newer version.json reloads
+  // it, unless she is in the middle of writing something. A refresh always works too (index.html checks first).
+  let lastCheck = 0;
+  async function checkUpdate() {
+    if (!window.MUM_VERSION || Date.now() - lastCheck < 60000) return;
+    lastCheck = Date.now();
+    try {
+      const r = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+      const v = (await r.json()).v;
+      const box = $('#box');
+      if (v && v !== window.MUM_VERSION && !(box && box.value.trim()) && !$('#pairbox')) location.reload();
+    } catch (e) { /* offline: try again later */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted) checkUpdate(); });
+  setInterval(checkUpdate, 15 * 60 * 1000);
+
   if (!location.hash) history.replaceState(null, '', '#/');
   route();
   if (store.token) pickRoute().catch(() => {});
