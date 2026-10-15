@@ -1332,7 +1332,7 @@
         <div class="micline" hidden><span class="mdot"></span><span class="mtext">Listening…</span><button class="mcancel" data-act="mcancel" aria-label="Cancel recording">${I.close}</button></div>
         <div class="photos" hidden></div>
         <div class="crow-in">
-          <button class="cbtn pbtn" data-act="photo" aria-label="Add photos">${I.photo}</button><input class="pfile" type="file" accept="image/*" multiple hidden>
+          <label class="cbtn pbtn" data-act="photo" aria-label="Add photos" role="button">${I.photo}<input class="pfile" type="file" accept="image/*" multiple></label>
           <textarea class="inbox" rows="1" placeholder="Message" enterkeyhint="enter" autocapitalize="sentences" aria-label="Message"></textarea>
           <button class="cbtn micbtn" data-act="mic" aria-label="Talk (Grok mic)">${I.mic}</button>
           <button class="send" data-act="send" aria-label="Send" disabled><span>${I.send}</span></button>
@@ -1702,14 +1702,15 @@
     // ----- photos: picked on the phone, made smaller (2048 px, JPEG), sent to the session's computer at once; the
     // message then carries them (Claude shows [Image #n]) -----
     const photosEl = $('.photos', el); const pfile = $('.pfile', el);
-    let shots = []; // { key, url, state: 'up' | 'ok' | 'err', photoId, job }
+    let shots = []; // { key, url, name, file → blob (made smaller), state: 'up' | 'ok' | 'err', photoId, job }
     function paintShots() {
       photosEl.hidden = !shots.length;
       photosEl.innerHTML = shots.map((p) => `<div class="shot ${p.state}" data-key="${p.key}"><img src="${p.url}" alt=""><button class="shotx" data-act="shotx" aria-label="Remove photo">${I.close}</button>${p.state === 'up' ? '<i class="spin"></i>' : p.state === 'err' ? '<b>!</b>' : ''}</div>`).join('');
       grow();
     }
+    const OKTYPE = /^image\/(png|gif|webp|jpeg)$/;
     function shrinkPhoto(file) {
-      return new Promise((res) => {
+      return new Promise((res, rej) => {
         if (/gif/.test(file.type)) { res(file); return; }
         const url = URL.createObjectURL(file); const img = new Image();
         img.onload = () => {
@@ -1718,24 +1719,38 @@
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
           c.toBlob((b) => res(b || file), 'image/jpeg', 0.86);
         };
-        img.onerror = () => { URL.revokeObjectURL(url); res(file); };
+        // (a picture the phone can't draw: sent as it is only if Claude can read it, else said plainly)
+        img.onerror = () => { URL.revokeObjectURL(url); if (OKTYPE.test(file.type)) res(file); else rej(new Error('this kind of picture can\'t be read. Try a screenshot of it.')); };
         img.src = url;
       });
     }
+    // (sent to the computer at once, so Send is quick; the made-smaller copy is kept: if the computer forgot it
+    // (it restarted for an update, or the phone switched Mac ↔ Windows), Send uploads it again by itself)
+    function upload(p) {
+      p.state = 'up'; p.photoId = null;
+      p.job = (p.blob ? Promise.resolve(p.blob) : shrinkPhoto(p.file).then((b) => { p.blob = b; p.file = null; return b; }))
+        .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${p.name}`, undefined, { raw: b, type: OKTYPE.test(b.type) ? b.type : 'image/jpeg', timeout: 120000 }))
+        .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your computers. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
+        .then(paintShots);
+      return p.job;
+    }
     function addPhotos(files) {
-      for (const f of [...files].slice(0, Math.max(0, 20 - shots.length))) {
-        const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), state: 'up', photoId: null };
-        const name = encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, ''));
-        p.job = shrinkPhoto(f)
-          .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${name}`, undefined, { raw: b, type: /^image\/(png|gif|webp|jpeg)$/.test(b.type) ? b.type : 'image/jpeg', timeout: 120000 }))
-          .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your computers. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
-          .then(paintShots);
-        shots.push(p);
+      const pics = [...files].filter((f) => !f.type || /^image\//.test(f.type));
+      if (pics.length < files.length) toast('Only photos can be added here.', 'err');
+      if (shots.length + pics.length > 20) toast('20 photos at most in one message.', 'err');
+      for (const f of pics.slice(0, Math.max(0, 20 - shots.length))) {
+        const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), file: f, name: encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, '')) };
+        shots.push(p); upload(p);
       }
       paintShots();
     }
-    $('[data-act="photo"]', el).addEventListener('click', () => pfile.click());
     pfile.addEventListener('change', () => { if (pfile.files && pfile.files.length) addPhotos(pfile.files); pfile.value = ''; });
+    // (a photo copied on the phone, then Paste in the box: added like a picked one)
+    box.addEventListener('paste', (e) => {
+      const fl = [...((e.clipboardData && e.clipboardData.items) || [])].filter((x) => x.kind === 'file' && /^image\//.test(x.type)).map((x) => x.getAsFile()).filter(Boolean);
+      if (!fl.length) return;
+      e.preventDefault(); addPhotos(fl);
+    });
     photosEl.addEventListener('click', (e) => {
       const x = e.target.closest('[data-act="shotx"]'); if (!x) return;
       const k = x.closest('.shot').dataset.key; const p = shots.find((q) => q.key === k);
@@ -1925,7 +1940,14 @@
       atBottom = true;
       if (tab === 'chat') renderChat();
       try {
-        const r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...(photos.length ? { photos } : {}) });
+        let r;
+        try { r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...(photos.length ? { photos } : {}) }); } catch (e) {
+          // (the computer forgot the photos: restarted for an update, or the phone switched Mac ↔ Windows: up again, once)
+          if (!photos.length || !/photo was lost/i.test(e.message || '')) throw e;
+          await Promise.all(sent.map(upload));
+          if (sent.some((x) => x.state !== 'ok')) throw new Error('a photo didn\'t make it. Remove it (✕) or add it again.');
+          r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, photos: sent.map((x) => x.photoId) });
+        }
         p.status = r && r.queued ? 'queued' : 'sent';
         if (r && r.movedTo) { follow(r.movedTo); return; }
         if (tab === 'screen') toast(p.status === 'queued' ? 'Will send when it\'s ready' : 'Sent');
