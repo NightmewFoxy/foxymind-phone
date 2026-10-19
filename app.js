@@ -2195,7 +2195,7 @@
   function FoldersView() {
     const el = screenEl('folders', `
       <header class="topbar">
-        <div class="brandrow"><h1>Folders</h1>${connPill()}</div>
+        <div class="brandrow"><h1>Folders</h1><button class="ibtn" data-act="newfolder" data-feat="newfolder" aria-label="New folder">${I.plus}</button>${connPill()}</div>
         <div class="offline-slot">${offlineBanner()}</div>
       </header>
       <div class="scroll can-stale"><div class="body"></div></div>
@@ -2205,7 +2205,7 @@
     let fl = null;
     function render() {
       if (!data.folders) { body.innerHTML = '<div class="glabel">&nbsp;</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
-      if (!data.folders.length) { body.innerHTML = '<div class="empty"><b>No folders yet</b>Folders you use in FoxyMind show up here.</div>'; return; }
+      if (!data.folders.length) { body.innerHTML = `<div class="empty"><b>No folders yet</b>Folders you use in FoxyMind show up here.${has('newfolder') ? '<button class="btn secondary" data-act="newfolder">New folder</button>' : ''}</div>`; return; }
       const row = (f) => `<a class="frow" href="#/f/${encodeURIComponent(f.id)}">
         <span class="ficon">${I.folder}</span>
         <span class="smain"><span class="stitle">${esc(f.name)}</span><span class="ssub"><span class="mtag ${f.machine === 'pc' ? 'pc' : ''}">${esc(f.machineName || (f.machine === 'pc' ? 'Windows' : 'Mac'))}</span><span class="fo">${f.sessions ? `${f.sessions} session${f.sessions === 1 ? '' : 's'}` : 'No open sessions'}</span></span></span>
@@ -2217,10 +2217,40 @@
       data.folders = Array.isArray(r.folders) ? r.folders : [];
       render();
     }
+    // + : a new project folder (in ~/Projects, or on the Desktop), then its page to start a chat in it
+    function newFolder() {
+      let where = 'projects'; let making = false;
+      const whereRow = () => `<div class="mlab">Where</div><div class="mrow">${[['projects', 'Projects'], ['desktop', 'Desktop']].map(([k, l]) => `<button type="button" data-where="${k}" class="${k === where ? 'on' : ''}" aria-pressed="${k === where}">${l}</button>`).join('')}</div>`;
+      const sh = sheet({
+        title: 'New folder', sub: 'For a new project, on your computers too',
+        html: `<form class="rename"><input class="rin" type="text" maxlength="80" placeholder="Project name" aria-label="Folder name" enterkeyhint="done" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="mpick fwhere">${whereRow()}</div><p class="ferr small" hidden></p><button type="submit" class="btn primary">Make folder</button></form>`,
+        onClick(e) { const w = e.target.closest('[data-where]'); if (w && !making) { where = w.dataset.where; $('.fwhere', sh.body).innerHTML = whereRow(); } },
+      });
+      const f = $('form', sh.body); const inp = $('.rin', sh.body); const err = $('.ferr', sh.body); const btn = $('button[type="submit"]', sh.body);
+      setTimeout(() => inp.focus(), 60);
+      inp.addEventListener('input', () => { err.hidden = true; });
+      f.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const name = inp.value.trim();
+        if (!name) { inp.focus(); return; }
+        if (making) return;
+        making = true; btn.innerHTML = '<span class="spin"></span>Making…';
+        try {
+          const r = await api('POST', '/folders', { name, where }, { timeout: 30000 });
+          data.folders = null; // (its page reads the list again, with the new folder in it)
+          sh.close(); toast(r.existing ? 'That folder was already here' : `Made ${r.name}`);
+          go(`#/f/${encodeURIComponent(r.folderId)}`, 'push');
+        } catch (e2) {
+          making = false; btn.textContent = 'Make folder';
+          err.textContent = e2.offline ? 'Can\'t reach your computers' : e2.message; err.hidden = false; inp.focus();
+        }
+      });
+    }
     body.addEventListener('click', (e) => { const a = e.target.closest('a.frow'); if (a) { e.preventDefault(); go(a.getAttribute('href'), 'push'); } });
+    el.addEventListener('click', (e) => { if (e.target.closest('[data-act="newfolder"]')) newFolder(); });
     return {
       el,
-      mounted() { unwatch = watchBars(el); render(); fl = loop(fetchFolders, 10000); },
+      mounted() { unwatch = watchBars(el); paintFeatures(el); render(); fl = loop(fetchFolders, 10000); },
       destroy() { if (fl) fl.stop(); unwatch(); },
     };
   }

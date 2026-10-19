@@ -626,3 +626,4 @@ body.kb .sv .seg { display: none; }
   .sheetwrap { zoom: 1.25; height: calc(var(--vvh, 100vh) / 1.25); width: calc(100vw / 1.25); right: auto; }
   .sheet { left: 50%; right: auto; width: min(calc(100vw / 1.25), 820px); margin-left: calc(min(calc(100vw / 1.25), 820px) / -2); }
 }
+.ferr { margin: -4px 4px 0; color: var(--red, #ff6b6b); font-size: 14px; }
