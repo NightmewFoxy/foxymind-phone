@@ -14,7 +14,6 @@
   const MIC_QUIET_MS = 300; // (… but stops once this much quiet has come in after the tap: the last word is in)
   const MIC_PAD_MS = 300; // (silence added after the last word, so Grok hears the sentence end)
   const MIC_PREROLL_MS = 300; // (a mic still open from the last recording keeps this much from just before the tap)
-  const MIC_KEEP_MS = 30000; // (the mic stays open this long after a stop: the next tap records at once)
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
   const appEl = document.getElementById('app');
@@ -24,7 +23,9 @@
   // resampler or a properly filtered one (v9 averaged every 3 samples and dropped a sample at
   // each piece's edge: a click every 40 ms), read off the page's thread (AudioWorklet) so a busy screen never drops
   // sound. (The browser's noise filter + auto volume stay on: tried raw like F5, it was no better on a quiet,
-  // noisy test mic.) It stays open MIC_KEEP_MS after a stop: the next tap records at once, with the moment before it.
+  // noisy test mic.) It stays open after a stop while the app is on screen (owner 22 Oct 2026: "doesn't need me to allow
+  // the microphone every single time": iOS forgets the yes soon after the mic is closed), so the next tap records at
+  // once, with the moment before it, and never asks again. Closed when the app goes to the background.
   const MIC_WORKLET = "registerProcessor('fm-mic',class extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(1024);this.n=0}process(i){const c=i[0]&&i[0][0];if(c)for(let k=0;k<c.length;k++){this.b[this.n++]=c[k];if(this.n===1024){this.port.postMessage(this.b,[this.b.buffer]);this.b=new Float32Array(1024);this.n=0}}return true}})";
   let mic = null; // { ctx, stream, src, node, sink, rate, ring, ringLen, onPcm, floor, flowing, letGo, dead }
   function micResampler(rate) { // (→ 16 kHz: low-pass below 7.4 kHz, then steps of rate/16000; carries over between pieces)
@@ -94,7 +95,7 @@
       return m;
     } catch (e) { micRelease(m); throw e; }
   }
-  function micLetGo() { const m = mic; if (!m) return; m.onPcm = null; clearTimeout(m.letGo); m.letGo = setTimeout(() => micRelease(m), MIC_KEEP_MS); }
+  function micLetGo() { const m = mic; if (!m) return; m.onPcm = null; clearTimeout(m.letGo); }
   function micRelease(m) {
     if (!m || m.dead) return; m.dead = true; if (mic === m) mic = null;
     clearTimeout(m.letGo); m.onPcm = null;
