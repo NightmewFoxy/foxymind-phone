@@ -237,10 +237,14 @@
   const MODEL_LABEL = { opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', haiku: 'Haiku', fable: 'Fable' };
   const EFFORT_LABEL = Object.fromEntries(EFFORTS);
   const NEW_CHAT = { model: 'opus', effort: 'medium' };
+  // A locked phone (hello.lock, e.g. Opus 5.5 · Low only): its picker shows just that
+  const lock = () => (data.hello && data.hello.lock) || null;
+  const newChat = () => { const l = lock(); return l ? { model: l.model, effort: l.effort } : { ...NEW_CHAT }; };
   const modelLabel = (model, effort) => [MODEL_LABEL[model], EFFORT_LABEL[effort]].filter(Boolean).join(' · ');
   function pickerHtml(model, effort) {
     const row = (list, attr, cur) => `<div class="mrow">${list.map(([k, l]) => `<button type="button" data-${attr}="${k}" class="${k === cur ? 'on' : ''}" aria-pressed="${k === cur}">${l}</button>`).join('')}</div>`;
-    return `<div class="mpick"><div class="mlab">Model</div>${row(MODELS, 'model', model)}<div class="mlab">Effort</div>${row(EFFORTS, 'effort', effort)}</div>`;
+    const l = lock(); const only = (list, k) => (l ? list.filter(([x]) => x === l[k]) : list);
+    return `<div class="mpick"><div class="mlab">Model</div>${row(only(MODELS, 'model'), 'model', model)}<div class="mlab">Effort</div>${row(only(EFFORTS, 'effort'), 'effort', effort)}</div>`;
   }
   const machineTag = (s) => `<span class="mtag ${s.machine === 'pc' ? 'pc' : ''}">${esc(s.machineName || (s.machine === 'pc' ? 'Windows' : 'Mac'))}</span>`;
 
@@ -2043,7 +2047,7 @@
       if (has('account') && s.provider === 'claude') h += actRow('account', I.person, 'Switch account', { sub: s.account && s.account.name ? `Now on ${esc(s.account.name)}` : '', right: I.chev });
       if (v6()) {
         h += actRow('restart', I.restart, 'Restart', { sub: 'Same conversation, fresh process' });
-        h += actRow('duplicate', I.copy2, 'Duplicate', { sub: 'A new, empty session of the same kind here' });
+        if (!lock()) h += actRow('duplicate', I.copy2, 'Duplicate', { sub: 'A new, empty session of the same kind here' });
       }
       if (awake) h += `<label class="act"><span class="aico">${I.moon}</span><span class="alab">Keep awake<small>Never put to sleep when idle</small></span><input type="checkbox" class="switch" data-act="awake"${s.keepAwake ? ' checked' : ''}></label>`;
       h += actRow('sclose', I.xbig, 'Close window', { danger: true, sub: 'Frees its memory; resume later from its folder' });
@@ -2269,7 +2273,7 @@
       </header>
       <div class="scroll can-stale">
         <div class="fhead"><button class="btn primary" data-act="new">${I.plus}New Claude chat</button></div>
-        <div class="fpick">${pickerHtml(NEW_CHAT.model, NEW_CHAT.effort)}</div>
+        <div class="fpick">${pickerHtml(newChat().model, newChat().effort)}</div>
         <div class="kinds" data-feat="newkinds"><div class="mlab">Or start</div><div class="krow">
           <button type="button" class="kbtn" data-kind="codex">${I.k_codex}<span>Codex</span></button>
           <button type="button" class="kbtn" data-kind="grok">${I.k_grok}<span>Grok</span></button>
@@ -2284,7 +2288,7 @@
     let unwatch = () => {};
     let busy = false;
     let chats = null;
-    const start = { ...NEW_CHAT }; // what the new chat opens on (Opus 5.5 at medium each time, unless picked here)
+    const start = newChat(); // what the new chat opens on (Opus 5.5 at medium each time, unless picked here)
 
     function render(r) {
       if (!r) { chatsEl.innerHTML = '<div class="glabel">Resume a chat</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
