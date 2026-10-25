@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '10';
+  const APP_VERSION = '11';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -215,13 +215,14 @@
   }
   function clock(ms) {
     const d = new Date(ms);
-    const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const loc = zhOn() ? 'zh-CN' : [];
+    const t = d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' });
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const day = new Date(d); day.setHours(0, 0, 0, 0);
     const diff = Math.round((today - day) / 86400000);
     if (diff === 0) return `Today ${t}`;
     if (diff === 1) return `Yesterday ${t}`;
-    return `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${t}`;
+    return `${d.toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'short' })} ${t}`;
   }
   function bytes(n) {
     if (!n && n !== 0) return '';
@@ -258,6 +259,118 @@
     if (h < 24) return `${h}h${m % 60 ? ` ${m % 60}m` : ''}`;
     const d = Math.floor(h / 24);
     return `${d}d${h % 24 ? ` ${h % 24}h` : ''}`;
+  }
+
+  // ---------- Chinese screens (owner 26 Oct 2026, his mother's locked phone: "make everything chinese for her").
+  // A phone locked with lang 'zh' shows every label in Simplified Chinese: each text and label the app puts on the
+  // screen is looked up here as it appears (Claude's replies and her own words are left as they are). Remembered on
+  // the phone, so it starts in Chinese before the computer answers.
+  const ZH = {
+    'Model': '模型', 'Effort': '思考', 'Retry': '重试', 'Low': '低', 'Medium': '中', 'High': '高', 'xHigh': '很高', 'Max': '最高',
+    'Sessions': '对话', 'Session': '对话', 'Folders': '文件夹', 'Folder': '文件夹', 'Settings': '设置', 'Usage': '用量', 'Notifications': '通知',
+    'Chat': '聊天', 'Terminal': '终端', 'Copy': '复制', 'Copied': '已复制', 'Stop': '停止', 'Send': '发送', 'Message': '写消息…', 'Save': '保存',
+    'Back': '返回', 'Back to sessions': '返回对话', 'Back to folders': '返回文件夹', 'More': '更多', 'Menu': '菜单', 'Undo': '撤销', 'Clear': '清除', 'Paste': '粘贴',
+    'Rename': '改名', 'Renamed': '已改名', 'New name': '新名字', 'Restart': '重新开始', 'Close window': '关掉这个对话', 'Close this window': '关掉这个对话',
+    'Enhance': '改写', 'Enhance my prompt': '帮我改写', 'Enhancing…': '正在改写…', 'Prompt enhanced': '已改写', 'Add photos': '加照片', 'Remove photo': '去掉照片',
+    'Talk (Grok mic)': '说话', 'Stop and put the words in the box': '停止，把话放进框里', 'Cancel recording': '取消录音', 'Listening…': '在听…',
+    'Starting the mic…': '正在打开麦克风…', 'Writing it down…': '正在写下来…', 'Writing it down (sending it all)…': '正在写下来…', 'Heard nothing.': '没有听到声音。',
+    'Nothing was written down.': '没有写下任何字。', 'The words so far are in the box.': '听到的字已经放进框里了。',
+    'My previous prompt': '上一条消息', 'My next prompt': '下一条消息', 'Model and effort': '模型', 'More for this session': '更多',
+    'Search sessions': '搜索对话', 'Clear search': '清除搜索', 'No matches': '没有找到', 'Loading…': '正在加载…', 'Connecting…': '正在连接…',
+    'Reconnecting…': '正在重新连接…', 'Offline': '没有连上', 'Online': '已连上', 'Checking…': '正在检查…', 'Refreshing…': '正在刷新…', 'Just now': '刚刚', 'just now': '刚刚', 'Never': '从没有',
+    'Waiting for you': '等你回复', 'Stopped': '已停止', 'Working': '正在做', 'Done · still running': '好了 · 还在做', 'Idle': '空闲', 'Asleep': '休息中', 'Ended': '已结束', 'Closed': '已关闭',
+    'Ready': '准备好了', 'Starting…': '正在开始…', 'Sending…': '正在发送…', 'Sent': '已发送', 'Not sent': '没有发出去', 'Failed': '失败了', 'Unknown': '不知道', 'Untitled': '新对话', 'Untitled chat': '新对话', 'New chat': '新对话',
+    'Asleep. Sending wakes it up.': '在休息。发消息就会醒来。', 'This session has ended.': '这个对话已经结束了。', 'Needs you': '等你', 'Nothing needs you right now': '现在没有事要你处理',
+    'No sessions open': '没有打开的对话', 'No open sessions': '没有打开的对话', 'Start one from a folder.': '从文件夹开始一个新对话。', 'Open Folders': '打开文件夹',
+    'No folders yet': '还没有文件夹', 'Resume a chat': '继续以前的对话', 'No earlier chats in this folder.': '这里还没有以前的对话。', "Couldn't load chats": '对话加载不了',
+    'Try again': '再试一次', 'Or start': '或者开始', 'Open': '打开', 'No messages yet': '还没有消息', 'Type below to start.': '在下面打字开始。', 'Show earlier messages': '看更早的消息',
+    "It's asking you something": '它在问你', 'Answer with the keys below, or type a reply': '点下面的按钮回答，或者打字回复', 'See it on the Terminal tab': '在「终端」里看',
+    'Or type a different answer below.': '或者在下面打别的回答。', 'Answered': '已回答', 'Claude asks': 'Claude 在问', 'Claude asks me something': 'Claude 在问我',
+    "The session's terminal, live, as on your computer. You rarely need it: the Chat has everything, and questions show up there as buttons.": '电脑上的画面。一般不需要看：「聊天」里什么都有。',
+    'Only photos can be added here.': '这里只能加照片。', 'Sending the photos…': '正在发送照片…', 'Window closed. Its memory is freed.': '对话已经关掉了。',
+    'Restarting… same conversation.': '正在重新开始…还是同一个对话。', 'Same conversation, fresh process': '同一个对话，重新开始', 'It moved on to a fresh window. Carrying on there.': '换到一个新的对话继续了。',
+    'Something went wrong. Trying again…': '出了一点问题，正在再试…', 'Nothing came back': '没有回复', 'It went away': '不见了',
+    'Keep awake': '不要休息', 'Never put to sleep when idle': '空闲时也不休息', 'Kept awake': '不会休息', 'Sleeps when idle again': '空闲时会休息',
+    'Frees its memory; resume later from its folder': '关掉，以后可以在文件夹里继续', 'It is still working. Restart anyway? The turn in progress stops.': '它还在做。还是要重新开始吗？正在做的会停下来。',
+    'Notification': '通知', 'Notifications are on': '通知已打开', 'Notifications are off on this phone': '这个手机的通知已关掉', 'Notifications not allowed': '通知没有被允许',
+    'Notifications are blocked for FoxyMind': '通知被挡住了', 'Turn off on this phone': '在这个手机关掉', 'Send a test': '发一个测试', 'Test sent. It should arrive in a moment.': '已发送测试，马上会收到。',
+    'Get a notification when a session turns blue and needs you.': '对话等你回复时，收到通知。', 'One notification per session; tap it to open that session.': '点通知就会打开那个对话。',
+    'This browser can\'t show notifications.': '这个浏览器不能显示通知。', 'Connection': '连接', 'Last seen': '上次连上', 'Address': '地址', 'FoxyMind build': '版本',
+    'This phone': '这个手机', 'Unpair this phone': '取消这个手机的连接', 'This phone is unpaired': '这个手机已取消连接', 'This phone was unpaired': '这个手机的连接已取消',
+    'This phone was unpaired. Pair it again to continue.': '这个手机的连接已取消。请重新连接。', "Unpairing removes this phone from FoxyMind. You'll need a new pair link to use it again.": '取消后，这个手机就不能用了，要新的连接才可以再用。',
+    'Other screens': '其他屏幕', 'Pair another screen': '连接另一个屏幕', 'Pair': '连接', 'Pair code': '连接码', 'Pair link': '连接链接', 'Have a pair code?': '有连接码吗？', 'Or paste a pair link': '或者粘贴连接链接',
+    'Get a new code': '拿新的码', 'Getting a code…': '正在拿码…', 'For your car, a tablet or any browser: type a short code there instead of a link.': '平板或别的浏览器：在那里输入这个短码。',
+    'On the other screen, open': '在另一个屏幕打开', 'That code was already used or is too old. Get a new one.': '这个码已经用过或太旧了，请拿新的。',
+    'Your sessions, on your phone.': '在手机上和 Claude 聊天。', 'Add to Home Screen': '添加到主屏幕', 'Copy pair link': '复制连接链接', 'Tap': '点', 'Share': '分享', 'then': '然后', 'from your Home Screen.': '从主屏幕打开。', 'Paste your pair link there.': '在那里粘贴连接链接。',
+    'Duplicate': '复制一个', 'Duplicated': '已复制', 'Not now': '先不要', 'Type': '打字', 'Enter key': '确认键', 'Delete key': '删除键', 'Wrap on': '自动换行', 'Wrap off': '不换行',
+    'Projects': '项目', 'Desktop': '桌面', 'Where': '位置', 'Folder name': '文件夹名字', 'Project name': '名字', 'New folder': '新文件夹', 'Make folder': '建文件夹',
+    'Tool': '工具', 'Done, but a background job still runs.': '好了，还有一点在后台做。',
+    'Mac is offline or asleep': '电脑没有连上', 'Mac and Windows are offline or asleep': '电脑没有连上', 'Showing the last update.': '显示的是最后的内容。',
+    "Your computers haven't answered yet": '电脑还没有回应', 'Opus 5.5 · Low': 'Opus 5.5',
+    'FoxyMind': '小帮手', '👩 Mum': '👩 妈妈', 'Mac': '电脑', 'Windows': '电脑','Asked you something': '在问你', 'Asleep / ended': '休息中 / 已结束', 'Needs you': '等你', 'New Claude chat': '新对话',
+    "Windows didn't answer, so its chats aren't listed.": '电脑没有回应，以前的对话没有列出来。', 'Turn on notifications': '打开通知', 'Off or asleep': '没开或休息中',
+    'Do you want to proceed?': '要继续吗？', 'Yes': '是', 'No': '不要', 'No, and tell Claude what to do differently': '不要，告诉 Claude 要怎么做',
+    'up': '上', 'down': '下', 'enter': '确认', 'esc': '取消', 'Enter': '确认', 'Esc': '取消',
+    'Read': '看文件', 'Write': '写文件', 'Edit': '改文件', 'Grep': '找', 'Glob': '找文件', 'WebSearch': '上网查', 'WebFetch': '看网页', 'Agent': '助手', 'Task': '助手', 'TodoWrite': '计划', 'AskUserQuestion': '问你',
+  };
+  // (state words in the lists, e.g. "waiting 11m", "3 working")
+  const ZH_WORD = { waiting: '等你', working: '正在做', stopped: '已停止', 'still running': '还在做', idle: '空闲', asleep: '休息中', ended: '已结束' };
+  const ZH_RE = [
+    [/^(\d+)s$/, '$1秒'], [/^(\d+)m$/, '$1分钟'], [/^(\d+)h$/, '$1小时'], [/^(\d+)d$/, '$1天'], [/^(\d+)mo$/, '$1个月'],
+    [/^(\d+)(s|m|h|d|mo) ago$/, (m, n, u) => `${n}${{ s: '秒', m: '分钟', h: '小时', d: '天', mo: '个月' }[u]}前`],
+    [/^Today (.+)$/, '今天 $1'], [/^Yesterday (.+)$/, '昨天 $1'], [/^(\d+) steps$/, '$1 个步骤'],
+    [/^Photo not added: (.+)$/, (m, why) => `照片没有加上：${zhText(why)}`], [/^(\d+) photos at most in one message\.$/, '一条消息最多 $1 张照片。'],
+    [/^Can't reach your computers.*$/, '连不上电脑，请稍后再试。'], [/^Couldn't (.+?): (.+)$/, '没有成功：$2'], [/^Now on (.+)$/, '现在用 $1'],
+    [/^(.+) online$/, '已连上'], [/^Last seen (.+) ago\.$/, (m, a) => `上次连上：${zhText(a)}前。`], [/^Updated (.+) ago$/, (m, a) => `${zhText(a)}前更新`],
+    [/^Paired with .+$/, '已连接'], [/^Something went wrong \(\d+\)$/, '出了一点问题'], [/^A photo .+$/, '有一张照片没有送到，请再加一次。'],
+    [/^Will send when it.+$/, '它好了就会发送'], [/^Not sent: (.+)$/, (m, why) => `没有发出去：${zhText(why)}`],
+    [/^(waiting|working|stopped|still running|idle|asleep|ended) (\S+)$/, (m, w, a) => `${ZH_WORD[w]} ${zhText(a)}`],
+    [/^(\d+) (waiting|working|stopped|still running|idle|asleep|ended)$/, (m, n, w) => `${n} ${ZH_WORD[w]}`],
+    [/^(\d+) folders?$/, '$1 个文件夹'], [/^(\d+) sessions?$/, '$1 个对话'], [/^(\d+) open$/, '$1 个打开'], [/^Last: (.+)$/, '最后：$1'],
+    [/^Yes, and don't ask again.*$/, '是，以后不用再问'], [/^Wrap: (on|off)$/, (m, o) => (o === 'on' ? '自动换行' : '不换行')],
+    [/^(.+ · .+)$/, (m, all) => all.split(' · ').map((x) => zhText(x)).join(' · ')], // (labels joined with a dot: each part on its own)
+  ];
+  function zhText(s) {
+    const t = String(s).trim(); if (!t || !/[A-Za-z]/.test(t)) return s;
+    if (Object.prototype.hasOwnProperty.call(ZH, t)) return String(s).replace(t, ZH[t]);
+    for (const [re, to] of ZH_RE) if (re.test(t)) return String(s).replace(t, t.replace(re, to));
+    return s;
+  }
+  const zhOn = () => { const l = data.hello && data.hello.lock; return l ? l.lang === 'zh' : !!store.zh; };
+  // (her words, Claude's replies, the live screen, anything typed: never changed)
+  const ZH_SKIP = '.md, .msg.user, .msg.system, pre, code, textarea, input, .term, .mtext, .what';
+  const ZH_ATTRS = ['aria-label', 'placeholder', 'title'];
+  function zhNode(n) {
+    if (n.nodeType === 3) {
+      const p = n.parentElement; if (!p || p.closest(ZH_SKIP)) return;
+      const v = zhText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v;
+      return;
+    }
+    if (n.nodeType !== 1 || n.closest(ZH_SKIP.replace('textarea, input, ', ''))) return;
+    for (const a of ZH_ATTRS) { const v = n.getAttribute(a); if (v) { const z = zhText(v); if (z !== v) n.setAttribute(a, z); } }
+    if (n.closest('textarea, input')) return;
+    const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let x = w.nextNode(); x; x = w.nextNode()) {
+      if (x.nodeType === 3) zhNode(x);
+      else for (const a of ZH_ATTRS) { const v = x.getAttribute(a); if (v) { const z = zhText(v); if (z !== v) x.setAttribute(a, z); } }
+    }
+  }
+  let zhObs = null;
+  function zhApply() {
+    const on = zhOn();
+    if (on !== !!store.zh) { store.zh = on; save(); }
+    document.documentElement.lang = on ? 'zh-CN' : 'en';
+    if (!on) { if (zhObs) { zhObs.disconnect(); zhObs = null; } return; }
+    if (zhObs) return;
+    zhNode(document.body);
+    zhObs = new MutationObserver((list) => {
+      for (const m of list) {
+        if (m.type === 'characterData') zhNode(m.target);
+        else if (m.type === 'attributes') zhNode(m.target);
+        else for (const n of m.addedNodes) zhNode(n);
+      }
+    });
+    zhObs.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ZH_ATTRS });
   }
 
   // toast(msg, kind, { action: 'Undo', onAction }) — an action toast stays a little longer and can be tapped
@@ -337,6 +450,7 @@
     if (h.computer) { if (routeNow() === 'mac') store.macName = h.computer; else store.pcName = h.computer; }
     store.features = Array.isArray(h.features) ? h.features : [];
     save();
+    zhApply();
     paintConn();
     paintFeatures();
     if (view && view.onHello) view.onHello();
@@ -536,6 +650,7 @@
           body: opts.raw ? opts.raw : body !== undefined ? JSON.stringify(body) : undefined,
           signal: ctl ? ctl.signal : undefined,
         });
+        if (opts.blob && res.ok) { const b = await res.blob(); if (timer) clearTimeout(timer); markOk(); return b; } // (a picture)
         const text = await res.text();
         if (timer) clearTimeout(timer);
         try { data = text ? JSON.parse(text) : {}; } catch (e) { bad = true; } // a Cloudflare error page
@@ -1266,9 +1381,13 @@
       flush();
       if (p.type === 'text' && p.text && p.text.trim()) {
         // code blocks scroll sideways, so their Copy button sits on a still wrapper above the scrolling part
-        const html = window.md.render(p.text)
+        // (a phone fenced to one folder: a picture of that folder in the reply, ![x](images/x.png), is shown)
+        const pics = []; let txt = p.text;
+        if (lock() && lock().oneFolder) txt = txt.replace(/!\[[^\]\n]*\]\(((?:images|notes|dashboards)\/[^()\s]+\.(?:png|jpe?g|webp|gif))\)/gi, (m, f) => { pics.push(f); return `FMPIC${pics.length - 1}Z`; });
+        const html = window.md.render(txt)
           .replace(/<pre class="code"([^>]*)><button type="button" class="copy" title="Copy">Copy<\/button>/g, '<div class="codewrap"><button type="button" class="copy">Copy</button><pre class="code"$1>')
-          .replace(/<\/code><\/pre>/g, '</code></pre></div>');
+          .replace(/<\/code><\/pre>/g, '</code></pre></div>')
+          .replace(/FMPIC(\d+)Z/g, (m, i) => (pics[i] ? `<img class="fpic" data-file="${esc(pics[i])}" alt="">` : m));
         out += `<div class="md">${html}</div>`;
       }
     }
@@ -1711,41 +1830,59 @@
     function paintShots() {
       photosEl.hidden = !shots.length;
       photosEl.innerHTML = shots.map((p) => `<div class="shot ${p.state}" data-key="${p.key}"><img src="${p.url}" alt=""><button class="shotx" data-act="shotx" aria-label="Remove photo">${I.close}</button>${p.state === 'up' ? '<i class="spin"></i>' : p.state === 'err' ? '<b>!</b>' : ''}</div>`).join('');
+      // (a photo this phone can't draw, e.g. HEIC: a picture sign instead of a broken one; it still goes)
+      $$('img', photosEl).forEach((i) => { i.onerror = () => { const x = document.createElement('i'); x.className = 'nopic'; x.textContent = '🖼️'; i.replaceWith(x); }; });
       grow();
     }
     const OKTYPE = /^image\/(png|gif|webp|jpeg)$/;
+    const PHOTO_MAX = 100;
     function shrinkPhoto(file) {
       return new Promise((res, rej) => {
         if (/gif/.test(file.type)) { res(file); return; }
         const url = URL.createObjectURL(file); const img = new Image();
         img.onload = () => {
-          const k = Math.min(1, 2048 / Math.max(img.naturalWidth, img.naturalHeight));
+          const k = Math.min(1, (shots.length > 10 ? 1600 : 2048) / Math.max(img.naturalWidth, img.naturalHeight));
           const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
           c.toBlob((b) => res(b || file), 'image/jpeg', 0.86);
         };
-        // (a picture the phone can't draw: sent as it is only if Claude can read it, else said plainly)
-        img.onerror = () => { URL.revokeObjectURL(url); if (OKTYPE.test(file.type)) res(file); else rej(new Error('this kind of picture can\'t be read. Try a screenshot of it.')); };
+        // (a picture the phone can't draw, e.g. HEIC on Android: sent as it is; the computer makes it a JPEG
+        // (features 'anyphoto'), an older one takes only what Claude reads)
+        img.onerror = () => { URL.revokeObjectURL(url); if (OKTYPE.test(file.type) || has('anyphoto')) res(file); else rej(new Error('this kind of picture can\'t be read. Try a screenshot of it.')); };
         img.src = url;
       });
     }
+    // Owner 26 Oct 2026 (his mother's Android, many photos at once: some went, some didn't): all of them uploading
+    // together over the tunnel timed out; they now go 3 at a time, the rest wait their turn (spinner on each).
+    let upRunning = 0; const upQueue = [];
+    function upNext() {
+      while (upRunning < 3 && upQueue.length) {
+        const [p, done] = upQueue.shift();
+        if (!shots.includes(p)) { done(); continue; } // (taken out while waiting)
+        upRunning++;
+        upload(p).then(() => { upRunning--; done(); upNext(); });
+      }
+    }
+    const queueUpload = (p) => { p.state = 'up'; p.job = new Promise((done) => { upQueue.push([p, done]); }); upNext(); return p.job; };
     // (sent to the computer at once, so Send is quick; the made-smaller copy is kept: if the computer forgot it
     // (it restarted for an update, or the phone switched Mac ↔ Windows), Send uploads it again by itself)
     function upload(p) {
       p.state = 'up'; p.photoId = null;
       p.job = (p.blob ? Promise.resolve(p.blob) : shrinkPhoto(p.file).then((b) => { p.blob = b; p.file = null; return b; }))
-        .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${p.name}`, undefined, { raw: b, type: OKTYPE.test(b.type) ? b.type : 'image/jpeg', timeout: 120000 }))
+        .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${p.name}`, undefined, { raw: b, type: OKTYPE.test(b.type) || !has('anyphoto') ? (OKTYPE.test(b.type) ? b.type : 'image/jpeg') : (b.type || 'application/octet-stream'), timeout: 200000 }))
         .then((r) => { p.photoId = r.photoId; p.state = 'ok'; }, (e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your computers. Photo not added.' : `Photo not added: ${e.message}`, 'err'); })
         .then(paintShots);
       return p.job;
     }
+    const maxPhotos = () => (has('anyphoto') ? PHOTO_MAX : 20);
     function addPhotos(files) {
-      const pics = [...files].filter((f) => !f.type || /^image\//.test(f.type));
+      // (Android hands some photos over without a type: kept, the computer works out what they are)
+      const pics = [...files].filter((f) => !f.type || /^image\//.test(f.type) || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(f.name || ''));
       if (pics.length < files.length) toast('Only photos can be added here.', 'err');
-      if (shots.length + pics.length > 20) toast('20 photos at most in one message.', 'err');
-      for (const f of pics.slice(0, Math.max(0, 20 - shots.length))) {
+      if (shots.length + pics.length > maxPhotos()) toast(`${maxPhotos()} photos at most in one message.`, 'err');
+      for (const f of pics.slice(0, Math.max(0, maxPhotos() - shots.length))) {
         const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), file: f, name: encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, '')) };
-        shots.push(p); upload(p);
+        shots.push(p); queueUpload(p);
       }
       paintShots();
     }
@@ -2983,6 +3120,39 @@
     };
   }
 
+  // ---------- her folder's pictures in replies (img.fpic, see renderParts): fetched with the phone's key, kept ----------
+  const picUrls = new Map(); // file → blob url | Promise
+  function loadPics() {
+    for (const img of $$('img.fpic:not([src])')) {
+      const f = img.dataset.file; const got = picUrls.get(f);
+      if (typeof got === 'string') { img.src = got; continue; }
+      if (got) continue;
+      picUrls.set(f, api('GET', `/file?path=${encodeURIComponent(f)}`, undefined, { blob: true, timeout: 60000 })
+        .then((b) => { const u = URL.createObjectURL(b); picUrls.set(f, u); $$('img.fpic:not([src])').filter((x) => x.dataset.file === f).forEach((x) => { x.src = u; }); },
+          () => { picUrls.delete(f); }));
+    }
+  }
+  new MutationObserver(() => { if (document.querySelector('img.fpic:not([src])')) loadPics(); }).observe(document.body, { childList: true, subtree: true });
+
+  // ---------- a new version while the app stays open (owner 26 Oct 2026, his mother's Android: "make it so that she can
+  // reopen the app and see it updated"). Android keeps the app running in the background, so reopening it doesn't load
+  // anything new: on every return (and every 15 min) version.json is checked past every cache, and a newer app loads
+  // itself, unless something is being typed or recorded. ----------
+  let verAt = 0;
+  async function checkVersion() {
+    if (Date.now() - verAt < 60000) return; verAt = Date.now();
+    try {
+      const v = await (await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+      if (!v || !v.v || String(v.v) === APP_VERSION) return;
+      const busy = [...document.querySelectorAll('textarea, input[type=text]')].some((x) => x.value && x.value.trim()) || document.querySelector('.micbtn.on, .shot.up');
+      if (busy) return;
+      try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* fine */ }
+      location.reload();
+    } catch (e) { /* offline: next time */ }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+  setInterval(() => { if (document.visibilityState === 'visible') checkVersion(); }, 15 * 60000);
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* fine without it */ });
@@ -2993,6 +3163,7 @@
   }
 
   fitViewport();
+  zhApply();
   route();
-  window.__fm = { store: () => store, data, conn }; // (for debugging from the console)
+  window.__fm = { store: () => store, data, conn, zhApply, zhText }; // (for debugging from the console)
 })();

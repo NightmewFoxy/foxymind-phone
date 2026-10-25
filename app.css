@@ -627,3 +627,7 @@ body.kb .sv .seg { display: none; }
   .sheet { left: 50%; right: auto; width: min(calc(100vw / 1.25), 820px); margin-left: calc(min(calc(100vw / 1.25), 820px) / -2); }
 }
 .ferr { margin: -4px 4px 0; color: var(--red, #ff6b6b); font-size: 14px; }
+
+/* her folder's pictures in replies (img.fpic), a photo the phone can't draw (HEIC) */
+.md img.fpic { display: block; max-width: 100%; min-height: 80px; margin: 8px 0; border-radius: 12px; background: rgba(127,127,127,.15); }
+.shot .nopic { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 26px; font-style: normal; }
