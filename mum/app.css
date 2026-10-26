@@ -61,6 +61,8 @@ a { color: var(--accent); }
 .msg td, .msg th { border: 1px solid var(--line); padding: 4px 8px; }
 .msg pre { white-space: pre-wrap; font-size: 15px; background: #f6f1ea; padding: 8px; border-radius: 8px; }
 .msg code { font-size: .9em; background: #f6f1ea; padding: 1px 4px; border-radius: 4px; }
+.msgcopy { display: block; margin: 10px 0 0; padding: 8px 14px; border-radius: 12px; background: none; border: 1px solid var(--line); color: var(--soft); font: inherit; font-size: 16px; }
+.msgcopy:active { background: var(--line); }
 .step { font-size: 15px; color: var(--soft); margin: 6px 0 0; }
 .carried { align-self: center; text-align: center; color: var(--soft); font-size: 17px; background: var(--card, #fff); border: 1px dashed #e6d9cc; border-radius: 14px; padding: 10px 14px; max-width: 92%; }
 .thinking {align-self: flex-start; color: var(--soft); display: flex; align-items: center; gap: 10px; padding: 6px 4px; }

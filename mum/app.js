@@ -447,6 +447,7 @@
     return { question: perm ? '小帮手想做一件事，可以吗？' : q || '请选一个：', options: options.filter((o) => !/^(type something|chat about this)/i.test(o.label)).map((o) => ({ ...o, label: cn(o.label), desc: perm ? '' : o.desc })) };
   }
   const STEP = { Write: '📝 存好了', Edit: '📝 改好了', MultiEdit: '📝 改好了', Read: '📖 正在看', WebSearch: '🔎 上网查一查', WebFetch: '🌐 正在看网页', Glob: '🗂️ 找一找你的东西', Grep: '🗂️ 找一找你的东西', TodoWrite: '🗒️ 想一想步骤' };
+  let replies = []; // the text of each reply on screen, for its 复制 button
   function renderMsg(m) {
     if (m.role === 'user') {
       // (a chat that got long goes on in a fresh one, which starts with the gist of the old one: shown as a note)
@@ -466,6 +467,9 @@
       else if (p.type === 'tool' && p.name !== 'AskUserQuestion') step = STEP[p.name] || '⚙️ 正在做';
     }
     if (step) html += `<p class="step">${esc(step)}</p>`;
+    // (owner 26 Oct 2026: one tap copies the whole reply)
+    const all = (m.parts || []).filter((p) => p.type === 'text' && p.text && p.text.trim()).map((p) => p.text.trim()).join('\n\n');
+    if (all) { replies.push(all); html += `<button class="msgcopy" data-copy="${replies.length - 1}">📋 复制</button>`; }
     return html ? `<div class="msg them">${html}</div>` : '';
   }
   // ≤2048 px JPEG (a phone photo is 3-5 MB). A photo this browser can't open (a Samsung's HEIC, owner 13 Oct 2026:
@@ -516,12 +520,14 @@
       const paint = (stick) => {
         const userCount = msgs.filter((m) => m.role === 'user').length;
         pending = pending.filter((p) => userCount <= p.base);
+        replies = [];
         let html = msgs.map(renderMsg).join('') + pending.map((p) => `<div class="msg me pending">${esc(p.text)}</div>`).join('');
         if (ask) html += `<div class="ask"><p class="q">${esc(ask.question)}</p><div class="opts">${ask.options.map((o) => `<button class="opt" data-n="${o.n}">${esc(o.label)}${o.desc ? `<small>${esc(o.desc)}</small>` : ''}</button>`).join('')}</div></div>`;
         else if (state === 'working' || pending.length) html += '<div class="thinking"><i></i><i></i><i></i><span>正在做，请等一下…</span></div>';
         if (!html) html = '<div class="empty">打个招呼开始吧。</div>';
         const stickNow = stick || nearBottom();
         list.innerHTML = html;
+        $$('.msgcopy', list).forEach((b) => { b.onclick = () => { const t = replies[b.dataset.copy] || ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).catch(() => { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;top:-100px;opacity:0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); if (!ok) throw new Error(); }).then(() => toast('复制好了')).catch(() => toast('这里不能复制')); }; });
         $$('.opt', list).forEach((b) => { b.onclick = async () => { $$('.opt', list).forEach((x) => { x.disabled = true; }); try { await api('POST', `/family/chats/${encodeURIComponent(chatId)}/key`, { key: b.dataset.n }); ask = null; state = 'working'; paint(true); setTimeout(() => poller && poller.kick(), 800); } catch (e) { toast(e.message); $$('.opt', list).forEach((x) => { x.disabled = false; }); } }; });
         if (stickNow) window.scrollTo(0, document.body.scrollHeight);
       };

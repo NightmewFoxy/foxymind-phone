@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '11';
+  const APP_VERSION = '12';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1395,6 +1395,7 @@
     return out;
   }
 
+  const replyText = new Map(); // hash -> a reply's whole text, for its Copy button
   function messageItems(messages) {
     const items = [];
     let lastAt = 0;
@@ -1409,7 +1410,11 @@
       else if (m.role === 'assistant') {
         const inner = renderParts(m.parts);
         if (!inner) continue;
-        html = `<div class="msg assistant">${inner}</div>`;
+        // (owner 26 Oct 2026: one tap copies the whole reply, its text parts as written)
+        const all = (m.parts || []).filter((p) => p && p.type === 'text' && p.text && p.text.trim()).map((p) => p.text.trim()).join('\n\n');
+        let cp = '';
+        if (all) { const k = hashStr(all); replyText.set(k, all); cp = `<button type="button" class="msgcopy" data-copy="${k}">${I.copy2}<span>Copy</span></button>`; }
+        html = `<div class="msg assistant">${inner}${cp}</div>`;
       } else html = `<div class="msg system">${esc(m.text || '')}</div>`;
       items.push({ key: `${m.role}${m.at || ''}:${hashStr(html)}`, html });
     }
@@ -1740,6 +1745,13 @@
     chatEl.addEventListener('click', async (e) => {
       const more = e.target.closest('[data-act="more"]');
       if (more) { chat.limit += 100; chat.size = null; atBottom = false; more.textContent = 'Loading…'; try { await fetchChat(); } catch (err) { toast(err.message, 'err'); } return; }
+      const mc = e.target.closest('.msgcopy');
+      if (mc) {
+        const ok = await copyText(replyText.get(mc.dataset.copy) || '');
+        const sp = mc.querySelector('span'); sp.textContent = ok ? 'Copied' : 'Failed';
+        setTimeout(() => { sp.textContent = 'Copy'; }, 1500);
+        return;
+      }
       const cp = e.target.closest('.codewrap > .copy');
       if (cp) {
         const code = cp.parentElement.querySelector('code');
