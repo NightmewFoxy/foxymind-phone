@@ -1602,19 +1602,19 @@
       hint.innerHTML = ht ? `<i></i>${esc(ht)}` : '';
       paintModel();
     }
-    // This window was closed after handing over to a fresh one (its context filled up): carry on in that one, with
-    // what's typed in the box (owner 13 Oct 2026: "Not sent: Windows: pane not found")
+    // This window was closed after handing over to a fresh one (its context filled up) or moving to the other computer:
+    // carry on in that one, with what's typed in the box (owner 13 Oct and 6 Nov 2026: "Not sent: pane not found")
     let followed = false;
     function follow(to) {
       if (followed || !to || to === id) return;
       followed = true;
       if (box.value.trim()) lsSet(`draft.${to}`, box.value);
-      toast('It moved on to a fresh window. Carrying on there.');
+      toast('Chat moved. Carrying on there.');
       navDir = 'fade'; location.replace(`#/s/${encodeURIComponent(to)}`);
     }
     function onSessions() {
       const s = (data.sessions || []).find((x) => x.id === id) || null;
-      if (!s && data.sessions) { const nx = data.sessions.find((x) => x.from === id); if (nx) { follow(nx.id); return; } }
+      if (!s && data.sessions) { const nx = data.sessions.find((x) => x.from === id || (x.was || []).includes(id)); if (nx) { follow(nx.id); return; } }
       const was = meta;
       meta = s || (Date.now() - openedAt < 20000 ? meta : null);
       paintHeader();
