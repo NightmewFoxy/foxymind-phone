@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '12';
+  const APP_VERSION = '13';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -271,7 +271,7 @@
     'Chat': '聊天', 'Terminal': '终端', 'Copy': '复制', 'Copied': '已复制', 'Stop': '停止', 'Send': '发送', 'Message': '写消息…', 'Save': '保存',
     'Back': '返回', 'Back to sessions': '返回对话', 'Back to folders': '返回文件夹', 'More': '更多', 'Menu': '菜单', 'Undo': '撤销', 'Clear': '清除', 'Paste': '粘贴',
     'Rename': '改名', 'Renamed': '已改名', 'New name': '新名字', 'Restart': '重新开始', 'Close window': '关掉这个对话', 'Close this window': '关掉这个对话',
-    'Enhance': '改写', 'Enhance my prompt': '帮我改写', 'Enhancing…': '正在改写…', 'Prompt enhanced': '已改写', 'Add photos': '加照片', 'Remove photo': '去掉照片',
+    'Enhance': '改写', 'Enhance my prompt': '帮我改写', 'Enhancing…': '正在改写…', 'Prompt enhanced': '已改写', 'Add photos': '加照片', 'Add photos or videos': '加照片或视频', 'Only photos and videos can be added here.': '这里只能加照片和视频。', 'Sending the video…': '正在发送视频…', 'Remove photo': '去掉照片',
     'Talk (Grok mic)': '说话', 'Stop and put the words in the box': '停止，把话放进框里', 'Cancel recording': '取消录音', 'Listening…': '在听…',
     'Starting the mic…': '正在打开麦克风…', 'Writing it down…': '正在写下来…', 'Writing it down (sending it all)…': '正在写下来…', 'Heard nothing.': '没有听到声音。',
     'Nothing was written down.': '没有写下任何字。', 'The words so far are in the box.': '听到的字已经放进框里了。',
@@ -319,7 +319,7 @@
     [/^(\d+)s$/, '$1秒'], [/^(\d+)m$/, '$1分钟'], [/^(\d+)h$/, '$1小时'], [/^(\d+)d$/, '$1天'], [/^(\d+)mo$/, '$1个月'],
     [/^(\d+)(s|m|h|d|mo) ago$/, (m, n, u) => `${n}${{ s: '秒', m: '分钟', h: '小时', d: '天', mo: '个月' }[u]}前`],
     [/^Today (.+)$/, '今天 $1'], [/^Yesterday (.+)$/, '昨天 $1'], [/^(\d+) steps$/, '$1 个步骤'],
-    [/^Photo not added: (.+)$/, (m, why) => `照片没有加上：${zhText(why)}`], [/^(\d+) photos at most in one message\.$/, '一条消息最多 $1 张照片。'],
+    [/^Photo not added: (.+)$/, (m, why) => `照片没有加上：${zhText(why)}`], [/^Video not added: (.+)$/, (m, why) => `视频没有加上：${zhText(why)}`], [/^(\d+) photos at most in one message\.$/, '一条消息最多 $1 张照片。'],
     [/^Can't reach your computers.*$/, '连不上电脑，请稍后再试。'], [/^Couldn't (.+?): (.+)$/, '没有成功：$2'], [/^Now on (.+)$/, '现在用 $1'],
     [/^(.+) online$/, '已连上'], [/^Last seen (.+) ago\.$/, (m, a) => `上次连上：${zhText(a)}前。`], [/^Updated (.+) ago$/, (m, a) => `${zhText(a)}前更新`],
     [/^Paired with .+$/, '已连接'], [/^Something went wrong \(\d+\)$/, '出了一点问题'], [/^A photo .+$/, '有一张照片没有送到，请再加一次。'],
@@ -1461,7 +1461,7 @@
         <div class="micline" hidden><span class="mdot"></span><span class="mtext">Listening…</span><button class="mcancel" data-act="mcancel" aria-label="Cancel recording">${I.close}</button></div>
         <div class="photos" hidden></div>
         <div class="crow-in">
-          <label class="cbtn pbtn" data-act="photo" aria-label="Add photos" role="button">${I.photo}<input class="pfile" type="file" accept="image/*" multiple></label>
+          <label class="cbtn pbtn" data-act="photo" aria-label="${has('videos') ? 'Add photos or videos' : 'Add photos'}" role="button">${I.photo}<input class="pfile" type="file" accept="${has('videos') ? 'image/*,video/*' : 'image/*'}" multiple></label>
           <textarea class="inbox" rows="1" placeholder="Message" enterkeyhint="enter" autocapitalize="sentences" aria-label="Message"></textarea>
           <button class="cbtn micbtn" data-act="mic" aria-label="Talk (Grok mic)">${I.mic}</button>
           <button class="send" data-act="send" aria-label="Send" disabled><span>${I.send}</span></button>
@@ -1841,9 +1841,10 @@
     let shots = []; // { key, url, name, file → blob (made smaller), state: 'up' | 'ok' | 'err', photoId, job }
     function paintShots() {
       photosEl.hidden = !shots.length;
-      photosEl.innerHTML = shots.map((p) => `<div class="shot ${p.state}" data-key="${p.key}"><img src="${p.url}" alt=""><button class="shotx" data-act="shotx" aria-label="Remove photo">${I.close}</button>${p.state === 'up' ? '<i class="spin"></i>' : p.state === 'err' ? '<b>!</b>' : ''}</div>`).join('');
+      photosEl.innerHTML = shots.map((p) => `<div class="shot ${p.state}${p.video ? ' vid' : ''}" data-key="${p.key}">${p.video ? `<video src="${p.url}#t=0.1" muted playsinline preload="metadata"></video>${p.state === 'up' ? `<em class="pct">${p.pct || 0}%</em>` : '<em class="vmark">▶</em>'}` : `<img src="${p.url}" alt="">`}<button class="shotx" data-act="shotx" aria-label="Remove photo">${I.close}</button>${p.state === 'up' ? '<i class="spin"></i>' : p.state === 'err' ? '<b>!</b>' : ''}</div>`).join('');
       // (a photo this phone can't draw, e.g. HEIC: a picture sign instead of a broken one; it still goes)
       $$('img', photosEl).forEach((i) => { i.onerror = () => { const x = document.createElement('i'); x.className = 'nopic'; x.textContent = '🖼️'; i.replaceWith(x); }; });
+      $$('video', photosEl).forEach((i) => { i.onerror = () => { const x = document.createElement('i'); x.className = 'nopic'; x.textContent = '🎬'; i.replaceWith(x); }; });
       grow();
     }
     const OKTYPE = /^image\/(png|gif|webp|jpeg)$/;
@@ -1879,6 +1880,7 @@
     // (sent to the computer at once, so Send is quick; the made-smaller copy is kept: if the computer forgot it
     // (it restarted for an update, or the phone switched Mac ↔ Windows), Send uploads it again by itself)
     function upload(p) {
+      if (p.video) return uploadVideo(p);
       p.state = 'up'; p.photoId = null;
       p.job = (p.blob ? Promise.resolve(p.blob) : shrinkPhoto(p.file).then((b) => { p.blob = b; p.file = null; return b; }))
         .then((b) => api('POST', `/sessions/${encodeURIComponent(id)}/photo?name=${p.name}`, undefined, { raw: b, type: OKTYPE.test(b.type) || !has('anyphoto') ? (OKTYPE.test(b.type) ? b.type : 'image/jpeg') : (b.type || 'application/octet-stream'), timeout: 200000 }))
@@ -1886,29 +1888,71 @@
         .then(paintShots);
       return p.job;
     }
+    // A video goes as it is, in pieces (lib/phone.js): each answer says how much the computer has, the next piece starts
+    // there, so a lost connection or a locked phone just carries on. One computer holds the pieces: stays on it while it answers.
+    const VIDEO_PIECE = 8e6; const VIDEO_MAX = 4e9;
+    let awake = null;
+    function keepAwake(on) {
+      try {
+        if (!on) { if (awake) { awake.release(); awake = null; } return; }
+        if (navigator.wakeLock && document.visibilityState === 'visible' && (!awake || awake.released)) navigator.wakeLock.request('screen').then((w) => { awake = w; }, () => {});
+      } catch (e) { /* the phone may sleep, it carries on after */ }
+    }
+    function uploadVideo(p) {
+      p.state = 'up'; p.photoId = null; p.pct = 0; paintShots();
+      const f = p.file; const up = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+      p.upId = up;
+      const at = `/sessions/${encodeURIComponent(id)}/file?upload=${up}`;
+      const showPct = () => { const e = $(`.shot[data-key="${p.key}"] .pct`, photosEl); if (e) e.textContent = `${p.pct}%`; };
+      p.job = (async () => {
+        let r = { got: 0 }; let base = currentBase() || undefined; let fails = 0;
+        while (!p.gone) {
+          keepAwake(true);
+          try {
+            if (r.finishing) await sleep(1500);
+            r = r.finishing
+              ? await api('GET', at, undefined, { base, timeout: 30000 })
+              : await api('POST', `${at}&offset=${r.got}&total=${f.size}&name=${encodeURIComponent(f.name || 'video')}&type=${encodeURIComponent(f.type || '')}`, undefined, { raw: f.slice(r.got, r.got + VIDEO_PIECE), timeout: 200000, base });
+            fails = 0;
+            if (r.videoId) { p.photoId = r.videoId; p.state = 'ok'; return; }
+            p.pct = Math.min(99, Math.floor((r.got || 0) / f.size * 100)); showPct();
+          } catch (e) {
+            if (!e.offline || ++fails > 12) throw e;
+            if (fails === 4) base = undefined; // (that computer is gone: the other one, from the start if it has to be)
+            await sleep(Math.min(15000, 1500 * fails));
+          }
+        }
+      })().catch((e) => { p.state = 'err'; toast(e.offline ? 'Can\'t reach your computers. Video not added.' : `Video not added: ${e.message}`, 'err'); })
+        .then(() => { if (!shots.some((x) => x.video && x.state === 'up' && x !== p)) keepAwake(false); if (!p.gone) paintShots(); });
+      return p.job;
+    }
+    const isVideo = (f) => /^video\//.test(f.type || '') || (!f.type && /\.(mov|mp4|m4v|webm|mkv|avi|3gp)$/i.test(f.name || ''));
+    function dropVideo(p) { p.gone = true; if (p.video && p.upId && p.state === 'up') api('DELETE', `/sessions/${encodeURIComponent(id)}/file?upload=${p.upId}`).catch(() => {}); }
     const maxPhotos = () => (has('anyphoto') ? PHOTO_MAX : 20);
     function addPhotos(files) {
       // (Android hands some photos over without a type: kept, the computer works out what they are)
-      const pics = [...files].filter((f) => !f.type || /^image\//.test(f.type) || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(f.name || ''));
-      if (pics.length < files.length) toast('Only photos can be added here.', 'err');
+      const vidsOk = has('videos');
+      const pics = [...files].filter((f) => (isVideo(f) ? vidsOk && f.size <= VIDEO_MAX : !f.type || /^image\//.test(f.type) || /\.(heic|heif|jpe?g|png|webp|gif|bmp|tiff?|avif)$/i.test(f.name || '')));
+      if (pics.length < files.length) toast([...files].some((f) => vidsOk && isVideo(f) && f.size > VIDEO_MAX) ? 'Video not added: 4 GB at most.' : vidsOk ? 'Only photos and videos can be added here.' : 'Only photos can be added here.', 'err');
       if (shots.length + pics.length > maxPhotos()) toast(`${maxPhotos()} photos at most in one message.`, 'err');
       for (const f of pics.slice(0, Math.max(0, maxPhotos() - shots.length))) {
-        const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), file: f, name: encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, '')) };
+        const p = { key: Math.random().toString(36).slice(2), url: URL.createObjectURL(f), file: f, video: isVideo(f), name: encodeURIComponent((f.name || 'photo').replace(/\.\w+$/, '')) };
         shots.push(p); queueUpload(p);
       }
       paintShots();
     }
+    $('.pbtn', el).addEventListener('click', () => { pfile.accept = has('videos') ? 'image/*,video/*' : 'image/*'; }); // (a chat opened before the computer said what it can do)
     pfile.addEventListener('change', () => { if (pfile.files && pfile.files.length) addPhotos(pfile.files); pfile.value = ''; });
     // (a photo copied on the phone, then Paste in the box: added like a picked one)
     box.addEventListener('paste', (e) => {
-      const fl = [...((e.clipboardData && e.clipboardData.items) || [])].filter((x) => x.kind === 'file' && /^image\//.test(x.type)).map((x) => x.getAsFile()).filter(Boolean);
+      const fl = [...((e.clipboardData && e.clipboardData.items) || [])].filter((x) => x.kind === 'file' && /^(image|video)\//.test(x.type)).map((x) => x.getAsFile()).filter(Boolean);
       if (!fl.length) return;
       e.preventDefault(); addPhotos(fl);
     });
     photosEl.addEventListener('click', (e) => {
       const x = e.target.closest('[data-act="shotx"]'); if (!x) return;
       const k = x.closest('.shot').dataset.key; const p = shots.find((q) => q.key === k);
-      shots = shots.filter((q) => q !== p); if (p) URL.revokeObjectURL(p.url);
+      shots = shots.filter((q) => q !== p); if (p) { dropVideo(p); URL.revokeObjectURL(p.url); }
       paintShots();
     });
 
@@ -2077,16 +2121,17 @@
       const text = box.value;
       if (!text.trim() && !shots.length) return;
       const sent = shots; // (photos still on their way are waited for)
-      if (sent.some((x) => x.state === 'up')) { sendBtn.disabled = true; toast('Sending the photos…'); await Promise.all(sent.map((x) => x.job)); }
-      if (sent.some((x) => x.state === 'err')) { grow(); toast('A photo didn\'t make it. Remove it (✕) or add it again.', 'err'); return; }
+      if (sent.some((x) => x.state === 'up')) { sent.forEach((x) => { x.keep = true; }); sendBtn.disabled = true; toast(sent.some((x) => x.video) ? 'Sending the video…' : 'Sending the photos…'); await Promise.all(sent.map((x) => x.job)); }
+      if (sent.some((x) => x.state === 'err')) { grow(); toast(sent.some((x) => x.video) ? 'A photo or video didn\'t make it. Remove it (✕) or add it again.' : 'A photo didn\'t make it. Remove it (✕) or add it again.', 'err'); return; }
       if (shots !== sent) return; // (changed meanwhile)
-      const photos = sent.map((x) => x.photoId);
+      const media = () => { const ph = sent.filter((x) => !x.video).map((x) => x.photoId); const vi = sent.filter((x) => x.video).map((x) => x.photoId); return { ...(ph.length ? { photos: ph } : {}), ...(vi.length ? { videos: vi } : {}) }; };
+      const photos = sent.filter((x) => !x.video); const videos = sent.filter((x) => x.video);
       shots = []; paintShots();
       box.value = '';
       grow();
       lsSet(draftKey, '');
       const userTexts = chat.messages.filter((m) => m.role === 'user').map((m) => (m.text || '').trim());
-      const label = text.trim() + (photos.length ? `${text.trim() ? '\n' : ''}[${photos.length} image${photos.length > 1 ? 's' : ''}]` : ''); // (as the chat shows it)
+      const label = [text.trim(), photos.length ? `[${photos.length} image${photos.length > 1 ? 's' : ''}]` : '', videos.length ? `[${videos.length} video${videos.length > 1 ? 's' : ''}]` : ''].filter(Boolean).join('\n'); // (as the chat shows it)
       const p = { text: label, sentAt: Date.now(), status: 'sending', baseCount: userTexts.filter((t) => t === label).length };
       const list = pendingBySession.get(id) || [];
       list.push(p);
@@ -2095,12 +2140,12 @@
       if (tab === 'chat') renderChat();
       try {
         let r;
-        try { r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...(photos.length ? { photos } : {}) }); } catch (e) {
+        try { r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...media() }); } catch (e) {
           // (the computer forgot the photos: restarted for an update, or the phone switched Mac ↔ Windows: up again, once)
-          if (!photos.length || !/photo was lost/i.test(e.message || '')) throw e;
+          if (!sent.length || !/(photo|video) was lost/i.test(e.message || '')) throw e;
           await Promise.all(sent.map(upload));
           if (sent.some((x) => x.state !== 'ok')) throw new Error('a photo didn\'t make it. Remove it (✕) or add it again.');
-          r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, photos: sent.map((x) => x.photoId) });
+          r = await api('POST', `/sessions/${encodeURIComponent(id)}/prompt`, { text, ...media() });
         }
         p.status = r && r.queued ? 'queued' : 'sent';
         if (r && r.movedTo) { follow(r.movedTo); return; }
@@ -2328,6 +2373,7 @@
       },
       destroy() {
         subs.delete(onSessions);
+        shots.filter((x) => !x.keep).forEach(dropVideo); // (Send already pressed: it finishes and sends behind this screen)
         if (chatLoop) chatLoop.stop();
         if (screenLoop) screenLoop.stop();
         if (qLoop) qLoop.stop();

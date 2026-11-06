@@ -1,12 +1,12 @@
 // FoxyMind Phone service worker: keeps the app shell for offline starts, shows push notifications,
 // and opens the right session when one is tapped. The Mac's API (another origin) is never touched.
-const VERSION = 'fm-phone-v12b';
+const VERSION = 'fm-phone-v13';
 const SHELL = [
   './',
   './index.html',
-  './app.css?v=11',
-  './app.js?v=11',
-  './md.js?v=11',
+  './app.css?v=13',
+  './app.js?v=13',
+  './md.js?v=13',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
