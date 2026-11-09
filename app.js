@@ -233,9 +233,9 @@
   const COLOR_WORD = { blue: 'waiting', stopped: 'stopped', orange: 'working', half: 'still running', idle: 'idle', asleep: 'asleep', off: 'ended' };
   const STATE_LABEL = { blue: 'Waiting for you', stopped: 'Stopped', orange: 'Working', half: 'Done · still running', idle: 'Idle', asleep: 'Asleep', off: 'Ended' };
   // The model and effort picker (a session's chip, and what a new chat starts on: Opus 5.5 at medium unless picked)
-  const MODELS = [['opus', 'Opus 5.5'], ['sonnet', 'Sonnet 5.5']];
+  const MODELS = [['opus', 'Opus 5.5'], ['sonnet', 'Sonnet 5.5'], ['fable', 'Fable 5.2']];
   const EFFORTS = [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'xHigh'], ['max', 'Max']];
-  const MODEL_LABEL = { opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', haiku: 'Haiku', fable: 'Fable' };
+  const MODEL_LABEL = { opus: 'Opus 5.5', sonnet: 'Sonnet 5.5', haiku: 'Haiku', fable: 'Fable 5.2' };
   const EFFORT_LABEL = Object.fromEntries(EFFORTS);
   const NEW_CHAT = { model: 'opus', effort: 'medium' };
   // A locked phone (hello.lock, e.g. Opus 5.5 · Low only): its picker shows just that
