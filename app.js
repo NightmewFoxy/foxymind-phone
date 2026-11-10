@@ -2623,7 +2623,8 @@
       const more = isOpen ? `<div class="umore">
           ${a.error ? `<p class="uerr">${esc(a.error)}</p>` : ''}
           <div class="ufoot"><span>${a.updatedAt ? `Updated ${esc(age(a.updatedAt))} ago` : ''}${a.inUse ? ` · ${a.inUse} open session${a.inUse === 1 ? '' : 's'}` : ''}</span>
-          <button class="btn-sm${a.skipped ? ' on' : ''}" data-skip="${esc(a.id)}" data-to="${a.skipped ? '0' : '1'}" data-name="${esc(a.name)}">${a.skipped ? 'Use again' : 'Skip'}</button></div></div>` : '';
+          <button class="btn-sm${a.skipped ? ' on' : ''}" data-skip="${esc(a.id)}" data-to="${a.skipped ? '0' : '1'}" data-name="${esc(a.name)}">${a.skipped ? 'Use again' : 'Skip'}</button></div></div>`
+        : a.skipped ? `<div class="umore"><div class="ufoot"><span></span><button class="btn-sm on" data-skip="${esc(a.id)}" data-to="0" data-name="${esc(a.name)}">Use again</button></div></div>` : '';
       return `<div class="urow${a.skipped ? ' skipped' : ''}${isOpen ? ' open' : ''}" data-acc="${esc(a.id)}">
         <button type="button" class="uhead" data-act="utoggle" aria-expanded="${isOpen}"><span class="uname">${esc(a.name)}${a.plan ? `<span class="plan">${esc(a.plan)}</span>` : ''}</span><span class="utags">${tags.join('')}</span>${I.chev}</button>
         ${bars ? `<div class="ubars">${bars}</div>` : ''}${more}</div>`;
