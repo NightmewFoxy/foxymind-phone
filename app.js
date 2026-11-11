@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '13';
+  const APP_VERSION = '16';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -98,12 +98,87 @@
   function micLetGo() { const m = mic; if (!m) return; m.onPcm = null; clearTimeout(m.letGo); }
   function micRelease(m) {
     if (!m || m.dead) return; m.dead = true; if (mic === m) mic = null;
+    const wasRecording = !!m.onPcm;
     clearTimeout(m.letGo); m.onPcm = null;
+    if (wasRecording && micLostHook) setTimeout(micLostHook, 0);
     try { if (m.node) { m.node.disconnect(); if (m.node.port) m.node.port.onmessage = null; } } catch (e) {}
     try { if (m.stream) m.stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
     try { m.ctx.close(); } catch (e) {}
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden && mic && !mic.onPcm) micRelease(mic); }); // (never open in the background)
+
+  // ---------- the mic's safety copy (owner 12 Nov 2026: 10 min spoken, "the mic suddenly turned off", every word gone) ----------
+  // Every recording is also kept on the phone (IndexedDB) as it is heard, a piece every 2 s. The copy goes once its
+  // words are in the box. A recording that ended any other way (the chat closed or moved, the app was closed or
+  // reloaded, the mic failed, the computer lost it) is written down from the copy (/mic/once) and its words go into the
+  // box of the chat on screen (or the next one opened).
+  const micSafe = (() => {
+    const active = new Set(); let dbp = null; let busy = false; let again = false; let retry = null; let sink = null;
+    const PEND = 'micRescued';
+    const db = () => dbp || (dbp = new Promise((res, rej) => {
+      if (!window.indexedDB) { rej(new Error('no IndexedDB')); return; }
+      const q = indexedDB.open('fm-mic', 1);
+      q.onupgradeneeded = () => { const d = q.result; d.createObjectStore('recs', { keyPath: 'uid' }); d.createObjectStore('pieces', { autoIncrement: true }).createIndex('uid', 'uid'); };
+      q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+    }).catch((e) => { dbp = null; throw e; }));
+    const run = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction(['recs', 'pieces'], mode); const out = fn(t.objectStore('recs'), t.objectStore('pieces')); t.oncomplete = () => res(out && out.v); t.onerror = t.onabort = () => rej(t.error); }); };
+    const join = (parts) => { const n = parts.reduce((a, p) => a + p.length, 0); const o = new Int16Array(n); let i = 0; for (const p of parts) { o.set(p, i); i += p.length; } return o; };
+    function begin(r) {
+      r.uid = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; r.savedN = 0; active.add(r.uid);
+      run('readwrite', (recs) => { recs.put({ uid: r.uid, at: Date.now() }); }).catch(() => {});
+      r.safeTick = setInterval(() => flush(r), 2000);
+    }
+    function flush(r) {
+      if (!r.uid || r.forgotten || r.all.length <= r.savedN) return Promise.resolve();
+      const pcm = join(r.all.slice(r.savedN)); r.savedN = r.all.length;
+      return run('readwrite', (recs, pieces) => { pieces.add({ uid: r.uid, pcm: pcm.buffer }); }).catch(() => {});
+    }
+    function stop(r) { clearInterval(r.safeTick); }
+    function drop(uid) {
+      return run('readwrite', (recs, pieces) => {
+        recs.delete(uid);
+        const c = pieces.index('uid').openKeyCursor(IDBKeyRange.only(uid));
+        c.onsuccess = () => { const k = c.result; if (k) { pieces.delete(k.primaryKey); k.continue(); } };
+      }).catch(() => {});
+    }
+    // the words are in the box: the copy goes
+    function forget(r) { if (!r || !r.uid) return; stop(r); r.forgotten = true; active.delete(r.uid); drop(r.uid); }
+    // ended without its words: keep all of it, then write it down
+    async function lost(r) { if (!r || !r.uid || r.forgotten) return; stop(r); await flush(r); active.delete(r.uid); r.forgotten = true; rescueAll(); }
+    const pending = () => { try { return JSON.parse(lsGet(PEND) || '[]'); } catch (e) { return []; } };
+    function deliver() {
+      const list = pending(); if (!list.length || !sink) return;
+      lsSet(PEND, ''); sink(list.map((x) => x.text).join(' '), list.reduce((a, x) => a + (x.sec || 0), 0));
+    }
+    async function rescueAll() {
+      if (busy) { again = true; return; }
+      if (!store.token) return; busy = true; clearTimeout(retry);
+      try {
+        const recs = await run('readonly', (rs) => { const q = rs.getAll(); const o = {}; q.onsuccess = () => { o.v = q.result; }; return o; });
+        for (const m of recs || []) {
+          if (active.has(m.uid)) continue;
+          const parts = await run('readonly', (rs, ps) => { const q = ps.index('uid').getAll(IDBKeyRange.only(m.uid)); const o = {}; q.onsuccess = () => { o.v = q.result; }; return o; });
+          const pcm = join((parts || []).map((x) => new Int16Array(x.pcm)));
+          const sec = pcm.length / 16000;
+          if (sec < 1) { await drop(m.uid); continue; }
+          let x;
+          try { x = await api('POST', '/mic/once', undefined, { raw: new Blob([pcm.buffer]), timeout: 60000 + sec * 300 }); } catch (e) {
+            if (e.offline || !e.status || e.status >= 500 || /out of usage|too long/i.test(e.message || '')) { retry = setTimeout(rescueAll, 60000); break; } // (later)
+            x = null; // (refused for good: nothing to write down)
+          }
+          const t = String((x && x.text) || '').trim();
+          if (t) { const l = pending(); l.push({ text: t, sec: Math.round(sec), at: m.at }); lsSet(PEND, JSON.stringify(l)); }
+          await drop(m.uid);
+        }
+      } catch (e) { /* no storage: nothing kept */ } finally { busy = false; }
+      deliver();
+      if (again) { again = false; rescueAll(); }
+    }
+    return { begin, flush, forget, lost, rescueAll, setSink: (fn) => { sink = fn; deliver(); }, clearSink: (fn) => { if (sink === fn) sink = null; } };
+  })();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => micSafe.rescueAll(), 1500); });
+  setTimeout(() => micSafe.rescueAll(), 4000);
+  let micLostHook = null; // (the phone itself ended the mic mid-recording: the chat stops the recording properly)
 
   // ---------- storage ----------
   let store = {};
@@ -1998,7 +2073,7 @@
         }
       } finally { r.sending = false; }
     }
-    function micOff(r) { r.closed = true; clearInterval(r.tick); micLetGo(); }
+    function micOff(r) { r.closed = true; clearInterval(r.tick); clearInterval(r.safeTick); micLetGo(); }
     function micDrop(r) { if (r.id) api('DELETE', `/mic/${r.id}`, undefined, { base: r.base }).catch(() => {}); }
     // a piece that didn't land (a 404 = the recording is gone there; anything else = a hole in it, words would be
     // missing): carry on recording, the stop sends the whole thing. (An older computer without /mic/once: as before.)
@@ -2009,7 +2084,7 @@
     }
     async function micStart() {
       const r = { id: null, queue: [], all: [], seq: 0, seqMode: micSeq(), once: !!(data.hello && (data.hello.features || []).includes('miconce')) };
-      rec = r; micline.classList.remove('live'); mtext.textContent = 'Starting the mic…'; paintMic();
+      rec = r; micSafe.begin(r); micline.classList.remove('live'); mtext.textContent = 'Starting the mic…'; paintMic();
       // The computer is asked in the background. Before (v9) the sound only started once it had answered, a second
       // or more on the Tesla's mobile data, while the strip already said "Listening…": the first words were lost.
       // Now the sound is kept from the first moment and goes to the computer once it has said yes.
@@ -2037,13 +2112,14 @@
     function micFail(r, e) {
       if (rec !== r) return;
       rec = null; micOff(r); micDrop(r); paintMic();
+      if (r.live && r.all.length) micSafe.lost(r); else micSafe.forget(r); // (what was heard is written down all the same)
       toast(e && e.name === 'NotAllowedError' ? 'The mic is blocked for this app. Allow the microphone when it asks (or in Settings), then try again.'
         : e && e.offline ? 'Can\'t reach your computers.' : `Mic: ${(e && e.message) || e}`, 'err');
     }
     async function micStop() {
       const r = rec; if (!r) return;
       rec = null; r.stopping = true; paintMic();
-      if (!r.live) { micOff(r); micDrop(r); return; } // (the mic never opened: nothing was said)
+      if (!r.live) { micOff(r); micDrop(r); micSafe.forget(r); return; } // (the mic never opened: nothing was said)
       micBtn.disabled = true; box.placeholder = 'Writing it down…';
       let written; const writing = micWriting = new Promise((res) => { written = res; });
       const a = box.selectionStart != null ? box.selectionStart : box.value.length; const b = box.selectionEnd != null ? box.selectionEnd : a;
@@ -2068,6 +2144,7 @@
       micOff(r);
       // a little silence after the last word: Grok then hears the sentence end instead of it stopping mid-sound
       const pad = new Int16Array(16 * MIC_PAD_MS); r.queue.push(pad); r.all.push(pad);
+      const sec = joinPcm(r.all).length / 16000; let ok = false; // (a long recording takes a while to write down)
       try {
         if (!r.id && !r.lost) await r.started; // (the computer hasn't said yes yet: wait for it, the words are all here)
         let x = null; let failed = null;
@@ -2075,25 +2152,29 @@
           try {
             if (r.seqMode) { // (the last piece rides with the end: one trip to the computer)
               const tail = joinPcm(r.queue.splice(0));
-              x = await api('POST', `/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([tail.buffer]), timeout: 30000, base: r.base });
+              x = await api('POST', `/mic/${r.id}/end?seq=${r.seq++}`, undefined, { raw: new Blob([tail.buffer]), timeout: 30000 + sec * 250, base: r.base });
             } else {
               while (r.sending) await sleep(50);
               await pump(r, true);
-              x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000, base: r.base });
+              x = await api('POST', `/mic/${r.id}/end`, {}, { timeout: 30000 + sec * 250, base: r.base });
             }
           } catch (e) { failed = e; }
         } else if (!r.lost) failed = new Error('The mic didn\'t start on your computer. Try again.');
         // the live recording was lost or broke: the whole of it, once, to whichever computer answers
         if ((r.lost || failed) && r.once && r.all.length && !(failed && /out of usage/.test(failed.message || ''))) {
           box.placeholder = 'Writing it down (sending it all)…';
-          x = await api('POST', '/mic/once', undefined, { raw: new Blob([joinPcm(r.all).buffer]), timeout: 120000 });
+          x = await api('POST', '/mic/once', undefined, { raw: new Blob([joinPcm(r.all).buffer]), timeout: 60000 + sec * 300 });
         } else if (failed) throw failed;
         const t = String((x && x.text) || '').trim();
+        ok = true;
         if (shown != null && box.value !== shown) return; // (typed in the box meanwhile: leave it)
         if (!t && shown == null) { toast('Heard nothing.'); return; }
         put(t || heard);
-      } catch (e) { toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
-      finally { micBtn.disabled = false; box.placeholder = 'Message'; if (micWriting === writing) micWriting = null; written(); }
+      } catch (e) { if (sec >= 3) toast('Kept the recording · retrying', 'err'); else toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
+      finally {
+        if (ok) micSafe.forget(r); else micSafe.lost(r); // (not written down: the phone's copy is, later)
+        micBtn.disabled = false; box.placeholder = 'Message'; if (micWriting === writing) micWriting = null; written();
+      }
     }
     // keep a Grok mic ready on the computer while this chat is on screen (no ~1 s connect after the tap, lib/phonemic.js)
     const micWarm = () => { if (!document.hidden && !micBtn.hidden && data.hello && (data.hello.features || []).includes('micwarm')) api('POST', '/mic/warm', {}).catch(() => {}); };
@@ -2101,8 +2182,17 @@
     const onVis = () => { if (!document.hidden) micWarm(); }; document.addEventListener('visibilitychange', onVis);
     micBtn.addEventListener('mousedown', (e) => e.preventDefault()); // (keeps the keyboard as it is)
     micBtn.addEventListener('click', () => { if (rec) micStop(); else micStart(); });
-    $('[data-act="mcancel"]', el).addEventListener('click', () => { const r = rec; if (!r) return; rec = null; micOff(r); micDrop(r); paintMic(); });
+    $('[data-act="mcancel"]', el).addEventListener('click', () => { const r = rec; if (!r) return; rec = null; micOff(r); micDrop(r); micSafe.forget(r); paintMic(); });
     paintMic();
+    // the phone ended the mic itself (a call, Siri, another app took it): stop and write down what was heard
+    const onMicLost = () => { if (rec && rec.live) { toast('Mic stopped by the phone · writing it down', 'err'); micStop(); } };
+    micLostHook = onMicLost;
+    // words rescued from a recording that ended without them: into this box
+    const micSink = (t, sec) => {
+      const v = box.value; box.value = v + (v && !/\s$/.test(v) ? ' ' : '') + t; lsSet(draftKey, box.value); grow(); paintMic();
+      toast(`Recovered ${sec >= 60 ? `${Math.round(sec / 60)} min` : `${sec} s`} recording · in the box`);
+    };
+    micSafe.setSink(micSink);
     let draftTimer = null;
     box.addEventListener('input', () => {
       grow();
@@ -2379,7 +2469,9 @@
         if (qLoop) qLoop.stop();
         clearTimeout(draftTimer);
         lsSet(draftKey, box.value);
-        if (rec) { const r = rec; rec = null; micOff(r); micDrop(r); }
+        if (rec) { const r = rec; rec = null; micOff(r); micDrop(r); if (r.live) micSafe.lost(r); else micSafe.forget(r); } // (left mid-recording: written down, into the next box)
+        if (micLostHook === onMicLost) micLostHook = null;
+        micSafe.clearSink(micSink);
         micRelease(mic);
         clearInterval(warmTick); document.removeEventListener('visibilitychange', onVis);
         for (const p of shots) URL.revokeObjectURL(p.url);
