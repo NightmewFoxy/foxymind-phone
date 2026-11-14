@@ -2694,7 +2694,7 @@
     const scroll = $('.scroll', el);
     const atEl = $('.uat', el);
     const open = new Set();
-    let unwatch = () => {}; let ul = null; let refreshing = false; let err = null;
+    let unwatch = () => {}; let ul = null; let refreshing = false; let err = null; let resetting = null;
 
     function row(a, p) {
       const ws = a.windows || [];
@@ -2712,11 +2712,13 @@
       }
       if (a.error) tags.push('<span class="utag errt">error</span>');
       const bars = isOpen ? ws.map((w) => ubar(w, w.label)).join('') : `${w5 ? ubar(w5, '5-hour') : ''}${wk ? ubar(wk, 'Week') : ''}`;
+      // (14 Nov, owner: "unable to press reset buttons": the window's Reset buttons, always shown, one per kind)
+      const rbtns = (a.resets || []).map((k) => `<button class="btn-sm ureset${k.now ? ' go' : ''}${resetting === k.acct ? ' busy' : ''}" data-reset="${esc(k.acct)}" data-grant="${esc(k.grantId)}" data-what="${esc(k.what)}" data-name="${esc(a.name)}" data-why="${esc(k.why || '')}" data-now="${k.now ? 1 : 0}"${resetting ? ' disabled' : ''}>${resetting === k.acct ? 'Resetting…' : `↻ ${k.kind === 'fable' ? 'Fable' : k.now ? 'Reset now' : 'Reset'}${k.left > 1 ? ` ×${k.left}` : ''}`}</button>`).join('');
       const more = isOpen ? `<div class="umore">
           ${a.error ? `<p class="uerr">${esc(a.error)}</p>` : ''}
-          <div class="ufoot"><span>${a.updatedAt ? `Updated ${esc(age(a.updatedAt))} ago` : ''}${a.inUse ? ` · ${a.inUse} open session${a.inUse === 1 ? '' : 's'}` : ''}</span>
+          <div class="ufoot"><span>${a.updatedAt ? `Updated ${esc(age(a.updatedAt))} ago` : ''}${a.inUse ? ` · ${a.inUse} open session${a.inUse === 1 ? '' : 's'}` : ''}</span>${rbtns}
           <button class="btn-sm${a.skipped ? ' on' : ''}" data-skip="${esc(a.id)}" data-to="${a.skipped ? '0' : '1'}" data-name="${esc(a.name)}">${a.skipped ? 'Use again' : 'Skip'}</button></div></div>`
-        : a.skipped ? `<div class="umore"><div class="ufoot"><span></span><button class="btn-sm on" data-skip="${esc(a.id)}" data-to="0" data-name="${esc(a.name)}">Use again</button></div></div>` : '';
+        : a.skipped || rbtns ? `<div class="umore"><div class="ufoot"><span></span>${rbtns}${a.skipped ? `<button class="btn-sm on" data-skip="${esc(a.id)}" data-to="0" data-name="${esc(a.name)}">Use again</button>` : ''}</div></div>` : '';
       return `<div class="urow${a.skipped ? ' skipped' : ''}${isOpen ? ' open' : ''}" data-acc="${esc(a.id)}">
         <button type="button" class="uhead" data-act="utoggle" aria-expanded="${isOpen}"><span class="uname">${esc(a.name)}${a.plan ? `<span class="plan">${esc(a.plan)}</span>` : ''}</span><span class="utags">${tags.join('')}</span>${I.chev}</button>
         ${bars ? `<div class="ubars">${bars}</div>` : ''}${more}</div>`;
@@ -2747,6 +2749,23 @@
     }
     el.addEventListener('click', async (e) => {
       if (e.target.closest('[data-act="urefresh"]')) { refresh(); return; }
+      const rb = e.target.closest('[data-reset]');
+      if (rb) {
+        if (resetting) return;
+        const d = rb.dataset;
+        const why = d.why ? `${d.now === '1' ? 'Good time' : 'Better to wait'}: ${d.why}.
+
+` : '';
+        if (!window.confirm(`${why}Refill ${d.what} on ${d.name} now? It can't be undone.`)) return;
+        resetting = d.reset; render();
+        try {
+          const r = await api('POST', '/usage/reset', { accountId: d.reset, grantId: d.grant || undefined }, { timeout: 70000 });
+          if (r.usage) data.usage = r.usage;
+          toast(r.message || (r.ok ? 'Limits reset' : 'Couldn’t reset'), r.ok ? undefined : 'err');
+        } catch (er) { toast(er.offline ? 'Can’t reach your computers' : `Couldn't reset: ${er.message}`, 'err'); }
+        resetting = null; render();
+        return;
+      }
       const sk = e.target.closest('[data-skip]');
       if (sk) {
         const skip = sk.dataset.to === '1';
