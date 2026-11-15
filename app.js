@@ -1754,6 +1754,7 @@
       chat.size = r.size != null ? r.size : null;
       chat.claude = r.claude !== false;
       chat.messages = Array.isArray(r.messages) ? r.messages : [];
+      chat.ask = r.ask || null;
       chat.loaded = true;
       if (!chat.claude && !(meta && meta.claude)) { seg.hidden = true; setTab('screen'); return; }
       renderChat();
@@ -1855,7 +1856,17 @@
     // ----- a question on screen → buttons -----
     async function fetchQuestion() {
       const r = await api('GET', `/sessions/${encodeURIComponent(id)}/screen?lines=60`);
-      showQuestion(parseQuestion(r.text));
+      showQuestion(parseQuestion(r.text) || askFromChat(r.text));
+    }
+    // A small window on the computer can push the options off its screen: then the question comes from the chat log
+    // (server `ask`), shown only while the question box is still up on screen.
+    function askFromChat(text) {
+      const a = chat.ask;
+      const flat = String(text || '').replace(/\s+/g, '');
+      if (!a || !a.questions || !a.questions.length || !/Entertoselect|Esctocancel|tonavigate/i.test(flat)) return null;
+      const seen = (t) => { const k = String(t || '').replace(/\s+/g, '').slice(0, 14); return k.length > 2 && flat.includes(k); };
+      const cur = a.questions.find((x) => x.options.some((o) => seen(o.label) || seen(o.desc)) || seen(x.question)) || a.questions[0];
+      return { question: cur.question, context: '', options: cur.options.map((o, i) => ({ n: String(i + 1), label: o.label, desc: o.desc })) };
     }
     function showQuestion(nq) {
       const sig = nq ? JSON.stringify(nq) : '';
