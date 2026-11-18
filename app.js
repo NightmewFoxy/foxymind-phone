@@ -5,7 +5,7 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '16';
+  const APP_VERSION = '18';
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -47,7 +47,15 @@
       return Float32Array.from(out);
     };
   }
+  // A mic kept open can go dead without ending (18 Nov 2026: 40 s spoken, the phone sent only exact zeros, no words):
+  // the track muted or ended, no sound coming in, or only digital silence (a real mic is never exactly 0).
+  function micStale(m) {
+    const ts = (m.stream && m.stream.getAudioTracks()) || [];
+    return !ts.length || ts.some((t) => t.readyState !== 'live' || t.muted) || m.ctx.state === 'closed'
+      || (m.flowing && Date.now() - (m.lastAt || 0) > 1500) || m.zeroMs >= 1000;
+  }
   async function micOpen() {
+    if (mic && !mic.dead && micStale(mic)) micRelease(mic); // (checked before any wait: a new one is made in the tap)
     if (mic && !mic.dead) { clearTimeout(mic.letGo); if (mic.ctx.state !== 'running') await mic.ctx.resume().catch(() => {}); return mic; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('This screen can\'t record here.');
@@ -66,6 +74,7 @@
         if (m.dead) return;
         const sec = f.length / m.rate; let sq = 0; for (let i = 0; i < f.length; i++) sq += f[i] * f[i];
         const rms = Math.sqrt(sq / (f.length || 1));
+        m.lastAt = Date.now(); m.zeroMs = sq === 0 ? (m.zeroMs || 0) + sec * 1000 : 0;
         m.floor = Math.min(m.floor == null ? 1 : m.floor * (1 + 0.25 * sec) + 0.002 * sec, rms); // (the room's quiet level, drifting up slowly)
         const g = rs(f); const pcm = new Int16Array(g.length);
         for (let i = 0; i < g.length; i++) pcm[i] = Math.max(-1, Math.min(1, g[i])) * 0x7fff;
@@ -2110,15 +2119,32 @@
         const m = await micOpen(); // (in the tap itself the first time: iOS wants that)
         if (rec !== r) return; // (cancelled or failed meanwhile)
         for (const pcm of m.preroll()) { r.queue.push(pcm); r.all.push(pcm); } // (the moment just before the tap)
-        m.listen((pcm, rms, sec) => {
+        r.m = m; r.lastAt = Date.now(); r.zero = 0;
+        r.hear = (pcm, rms, sec) => {
           if (r.closed) return;
+          r.lastAt = Date.now(); r.zero = rms === 0 ? r.zero + sec * 1000 : 0;
           r.queue.push(pcm); r.all.push(pcm); micLive(r);
           micline.style.setProperty('--lvl', Math.min(1, rms * 12).toFixed(2));
-          if (r.tail) r.tail(rms, sec, m.floor);
-        });
+          if (r.tail) r.tail(rms, sec, r.m.floor);
+        };
+        m.listen(r.hear);
         if (m.flowing) micLive(r);
-        r.tick = setInterval(() => { pump(r).catch((e) => pieceFailed(r, e)); }, 250);
+        r.tick = setInterval(() => {
+          pump(r).catch((e) => pieceFailed(r, e));
+          if (!r.closed && !r.stopping && !r.reviving && (r.zero >= 1500 || Date.now() - r.lastAt > 2500)) micRevive(r);
+        }, 250);
       } catch (e) { micFail(r, e); }
+    }
+    // the mic went dead mid-recording (only exact zeros, or no sound at all): open a new one once, then give up out loud
+    async function micRevive(r) {
+      r.reviving = true; r.revived = (r.revived || 0) + 1;
+      const old = r.m; if (old) { old.onPcm = null; micRelease(old); }
+      if (r.revived > 1) { r.reviving = false; micFail(r, new Error('the phone\'s mic sends only silence. Close the app fully, open it again, then tap the mic.')); return; }
+      try {
+        const m = await micOpen();
+        if (rec !== r || r.closed) return;
+        r.m = m; r.zero = 0; r.lastAt = Date.now(); m.listen(r.hear);
+      } catch (e) { micFail(r, e); } finally { r.reviving = false; }
     }
     function micFail(r, e) {
       if (rec !== r) return;
@@ -2172,6 +2198,7 @@
           } catch (e) { failed = e; }
         } else if (!r.lost) failed = new Error('The mic didn\'t start on your computer. Try again.');
         // the live recording was lost or broke: the whole of it, once, to whichever computer answers
+        if (failed && failed.status === 422) { ok = true; toast(failed.message, 'err'); return; } // (only silence: nothing to keep)
         if ((r.lost || failed) && r.once && r.all.length && !(failed && /out of usage/.test(failed.message || ''))) {
           box.placeholder = 'Writing it down (sending it all)…';
           x = await api('POST', '/mic/once', undefined, { raw: new Blob([joinPcm(r.all).buffer]), timeout: 60000 + sec * 300 });
@@ -2181,7 +2208,7 @@
         if (shown != null && box.value !== shown) return; // (typed in the box meanwhile: leave it)
         if (!t && shown == null) { toast('Heard nothing.'); return; }
         put(t || heard);
-      } catch (e) { if (sec >= 3) toast('Kept the recording · retrying', 'err'); else toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
+      } catch (e) { if (e.status === 422) { ok = true; toast(e.message, 'err'); } else if (sec >= 3) toast('Kept the recording · retrying', 'err'); else toast(e.offline ? `Can't reach your computers. ${shown != null ? 'The words so far are in the box.' : 'Nothing was written down.'}` : e.message, 'err'); }
       finally {
         if (ok) micSafe.forget(r); else micSafe.lost(r); // (not written down: the phone's copy is, later)
         micBtn.disabled = false; box.placeholder = 'Message'; if (micWriting === writing) micWriting = null; written();
