@@ -5,7 +5,8 @@
 (() => {
   'use strict';
 
-  const APP_VERSION = '18';
+  const APP_VERSION = '19';
+  const CLAUDE_ONLY = true; // (owner 20 Nov 2026: only Claude is used; Codex/Grok hidden, not deleted)
   const LS = 'foxyPhone';
   const BREATH = 2400; // ms, the desktop's glow breath
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2599,11 +2600,11 @@
       <div class="scroll can-stale">
         <div class="fhead"><button class="btn primary" data-act="new">${I.plus}New Claude chat</button></div>
         <div class="fpick">${pickerHtml(newChat().model, newChat().effort)}</div>
-        <div class="kinds" data-feat="newkinds"><div class="mlab">Or start</div><div class="krow">
+        ${CLAUDE_ONLY ? '' : `<div class="kinds" data-feat="newkinds"><div class="mlab">Or start</div><div class="krow">
           <button type="button" class="kbtn" data-kind="codex">${I.k_codex}<span>Codex</span></button>
           <button type="button" class="kbtn" data-kind="grok">${I.k_grok}<span>Grok</span></button>
           <button type="button" class="kbtn" data-kind="shell">${I.k_term}<span>Terminal</span></button>
-        </div></div>
+        </div></div>`}
         <p class="fpath">${f0 && f0.path ? esc(f0.path) : ''}</p>
         <div class="chats"></div>
       </div>
@@ -2768,10 +2769,10 @@
         body.innerHTML = err ? `<div class="empty"><b>Couldn't load usage</b>${esc(err)}<button class="btn secondary" data-act="urefresh">Try again</button></div>` : '<div class="glabel">&nbsp;</div><div class="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
         return;
       }
-      const ps = (u.providers || []).filter((p) => p.accounts && p.accounts.length);
+      const ps = (u.providers || []).filter((p) => p.accounts && p.accounts.length && (!CLAUDE_ONLY || p.provider === 'claude'));
       if (!ps.length) { body.innerHTML = '<div class="empty"><b>No accounts</b>Sign in to Claude, Codex or Grok in FoxyMind on your Mac.</div>'; return; }
       body.innerHTML = ps.map((p) => `<div class="glabel">${esc(p.name || p.provider)} <span class="n">· ${p.accounts.length}</span></div><div class="list ulist">${p.accounts.map((a) => row(a, p)).join('')}</div>`).join('')
-        + '<p class="gfoot">Tap an account for every limit and to skip it. Skipped accounts are never used; their sessions move to others.</p>';
+        ;
     }
     async function load() {
       try { data.usage = await api('GET', '/usage'); err = null; } catch (e) { err = e.message; }
